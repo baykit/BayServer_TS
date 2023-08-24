@@ -1,6 +1,6 @@
 {
   "name": "bayserver-core",
-  "version": "0.0.45",
+  "version": "2.2.0",
   "description": "BayServer for Typescript",
   "main": "out/baykit/bayserver/bayserver.js",
   "types": "out/baykit/bayserver/bayserver.d.ts",
