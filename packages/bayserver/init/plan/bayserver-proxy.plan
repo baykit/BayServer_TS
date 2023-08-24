@@ -1,0 +1,71 @@
+[harbor]
+    charset UTF-8
+    groups plan/groups.plan
+    grandAgents 4 
+    #logLevel debug
+
+    # for Windows machine
+    #controlPort 2222
+    multiCore 1
+
+
+#
+#  Port settings
+#
+[port 8000]
+     docker http
+#     [permission]
+#          admit ip 127.0.0.1/255.0.0.0
+#          admit ip ::1/::ffff:ffff
+#          refuse ip *
+
+[port 8443]
+    docker http
+    [secure]
+        key       cert/oreore_key.p8
+        cert      cert/oreore.crt
+        #traceSSL  true
+
+#[port 2025]
+#    docker ajp
+#    [permission]
+#          admit ip 127.0.0.1/255.0.0.0
+#          admit ip ::1/::ffff:ffff
+#          refuse ip *
+
+#[port 2029]
+#    docker fcgi
+
+
+#
+#  Location settings
+#
+[city *]
+    [town /]
+        location www/root
+        welcome  index.html
+
+    [town /cgi-demo/]
+        location www/cgi-demo
+        welcome  index.html
+        [club *]
+            docker fcgiWarp
+            destCity localhost
+            destPort 2029
+            destTown /cgi-demo/
+
+#    [log log/access.log]
+#        format %a %l %u %t "%r" %>s %b
+
+#    [log log/agent.log]
+#        format %{User-Agent}i
+
+#    [log log/referer.log]
+#        format %{Referer}i -> %U
+
+
+   # [permission]
+    #       admit ip 127.0.0.1/255.255.255.255
+           #refuse ip 127.0.0.0/255.0.0.0
+
+ 

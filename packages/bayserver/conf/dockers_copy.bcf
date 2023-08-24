@@ -1,0 +1,22 @@
+harbor              bayserver-core.baykit.bayserver.docker.builtin.BuiltInHarborDocker
+port                bayserver-docker.baykit.bayserver.docker.http.HtpPortDocker
+port:http           bayserver-docker.baykit.bayserver.docker.http.HtpPortDocker
+port:ajp            bayserver-docker.baykit.bayserver.docker.ajp.AjpPortDocker
+port:fcgi           bayserver-docker.baykit.bayserver.docker.fcgi.FcgPortDocker
+port:h3             bayserver-docker.baykit.bayserver.docker.h3.H3PortDocker
+city                bayserver-core.baykit.bayserver.docker.builtin.BuiltInCityDocker
+town                bayserver-core.baykit.bayserver.docker.builtin.BuiltInTownDocker
+club                bayserver-core.baykit.bayserver.docker.file.FileDocker
+club:file           bayserver-core.baykit.bayserver.docker.file.FileDocker
+club:servlet        bayserver-docker.baykit.bayserver.docker.servlet.ServletDocker
+club:cgi            bayserver-docker.baykit.bayserver.docker.cgi.CgiDockerModule
+club:phpCgi         bayserver-docker.baykit.bayserver.docker.cgi.PhpCgiDocker
+club:ajpWarp        bayserver-docker.baykit..bayserver.docker.ajp.AjpWarpDocker
+club:fcgiWarp       bayserver-docker.baykit.bayserver.docker.fcgi.FcgWarpDocker
+club:httpWarp       bayserver-docker.baykit.bayserver.docker.http.HtpWarpDocker
+log                 bayserver-core.baykit.bayserver.docker.builtin.BuiltInLogDocker
+permission          bayserver-core.baykit.bayserver.docker.builtin.BuiltInPermissionDocker
+secure              bayserver-core.baykit.bayserver.docker.builtin.BuiltInSecureDocker
+trouble             bayserver-core.baykit.bayserver.docker.builtin.BuiltInTroubleDocker
+reroute:wordpress   bayserver-docker.baykit..bayserver.docker.wordpress.WordPressDocker
+

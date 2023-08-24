@@ -1,0 +1,27 @@
+{
+  "name": "bayserver",
+  "version": "0.0.45",
+  "description": "BayServer",
+  "main": "bootstrap.js",
+  "bin": {
+    "bayserver": "bin/bootstrap.js"
+  },
+  "scripts": {
+    "run": "node bin/bootstrap.js -home=. -plan=plan/bayserver.plan"
+  },
+  "keywords": [],
+  "author": "Yokohama Baykit",
+  "license": "Baykit Public Lisence",
+  "homepage": "https://baykit.yokohama/",
+  "dependencies": {
+    "process": "^0.11.10",
+    "typescript": "^4.9.4",
+    "bayserver-core": "0.0.45",
+    "bayserver-docker-ajp": "0.0.45",
+    "bayserver-docker-fcgi": "0.0.45",
+    "bayserver-docker-cgi": "0.0.45",
+    "bayserver-docker-http": "0.0.45",
+    "bayserver-docker-wordpress": "0.0.45",
+    "ts-node": "^10.9.1"
+  }
+}

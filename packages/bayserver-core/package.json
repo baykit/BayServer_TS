@@ -1,0 +1,23 @@
+{
+  "name": "bayserver-core",
+  "version": "0.0.45",
+  "description": "BayServer for Typescript",
+  "main": "out/baykit/bayserver/bayserver.js",
+  "types": "out/baykit/bayserver/bayserver.d.ts",
+  "scripts": {
+    "run": "./node_modules/.bin/ts-node",
+    "build": "tsc"
+  },
+  "author": "Yokohama Baykit",
+  "license": "Baykit Public Lisence",
+  "homepage": "https://baykit.yokohama/",
+  "dependencies": {
+    "@types/node": "^18.11.10",
+    "@types/source-map-support": "^0.5.6",
+    "process": "^0.11.10",
+    "source-map-support": "^0.5.21",
+    "stream": "^0.0.2",
+    "ts-node": "^10.9.1",
+    "typescript": "^4.9.3"
+  }
+}

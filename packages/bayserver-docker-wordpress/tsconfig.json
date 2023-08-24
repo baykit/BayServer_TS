@@ -1,0 +1,11 @@
+{
+  "compilerOptions": {
+    "target": "ES2016",
+    "module": "CommonJS",
+    "outDir": "baykit",
+    "rootDir": "src/baykit",
+    "sourceMap": true,
+    "declaration": true,
+    "declarationMap": true
+  }
+}
