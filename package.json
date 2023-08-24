@@ -1,0 +1,20 @@
+{
+    "name": "bayserver",
+    "description": "BayServer for Typescript",
+    "workspaces": [
+        "packages/bayserver-core",
+        "packages/bayserver-docker-ajp",
+        "packages/bayserver-docker-cgi",
+        "packages/bayserver-docker-fcgi",
+        "packages/bayserver-docker-http",
+        "packages/bayserver-docker-wordpress",
+        "packages/bayserver"
+    ],
+    "repository": {
+        "type": "git",
+        "url": "git@github.com:baykit/BayServer_TS.git"
+    },
+    "dependencies": {
+        "bayserver": "^0.0.41"
+    }
+}
