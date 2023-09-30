@@ -47,6 +47,7 @@ export class TourStore {
             tur = this.freeTours.pop()
         } else {
             if (!force && (this.activeTourMap.size >= TourStore.maxCount)) {
+                BayLog.warn("Max tour count reached")
                 return null;
             } else {
                 tur = new Tour();

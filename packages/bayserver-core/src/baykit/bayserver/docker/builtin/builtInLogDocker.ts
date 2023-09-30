@@ -197,7 +197,12 @@ export class BuiltInLogDocker extends DockerBase implements Log {
 
         // If threre are message to write, write it
         if (sb.length > 0) {
-            this.getLogger(tour.ship.agent).log(sb.toString());
+            try {
+                this.getLogger(tour.ship.agent).log(sb.toString());
+            }
+            catch(e) {
+                BayLog.error_e(e, "%s Error on logging: %s", tour, e.message)
+            }
         }
     }
 

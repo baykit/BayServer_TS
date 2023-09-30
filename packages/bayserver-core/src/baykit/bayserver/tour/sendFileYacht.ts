@@ -21,11 +21,11 @@ export class SendFileYacht extends Yacht {
 
     init(tur: Tour, file: string, fileLen: number, tp: Valve) {
         super.initYacht();
-        BayLog.debug("%s init file=%s", this, file)
         this.tour = tur;
         this.tourId = tur.tourId;
         this.file = file;
         this.fileLen = fileLen;
+        BayLog.debug("%s init file=%s", this, file)
         tur.res.setConsumeListener((len, resume) => {
             if(resume) {
                 tp.openValve();
@@ -67,15 +67,15 @@ export class SendFileYacht extends Yacht {
     }
 
     notifyEof(): number {
-        this.checkInitialized()
         BayLog.debug("%s EOF(^o^) %s", this, this.file);
+        this.checkInitialized()
         this.tour.res.endContent(this.tourId);
         return NextSocketAction.CLOSE;
     }
 
     notifyError(err: Error): void {
-        this.checkInitialized()
         BayLog.debug_e(err, "%s Error: %s", this, err.message);
+        this.checkInitialized()
         this.tour.res.sendError(this.tourId)
     }
 

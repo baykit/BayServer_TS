@@ -106,7 +106,10 @@ export class WarpShip extends Ship {
     endWarpTour(tur: Tour): void {
         let wdat: WarpData = WarpData.get(tur);
         BayLog.debug("wrp#%d end (tur=%s): started=%b ended=%b", wdat.warpId, tur, wdat.started, wdat.ended);
-        this.tourMap.delete(wdat.warpId)
+        if(!this.tourMap.has(wdat.warpId))
+            throw new Sink("%s WarpId not in tourMap: %d", tur, wdat.warpId);
+        else
+            this.tourMap.delete(wdat.warpId)
         this.docker.keepShip(this);
     }
 

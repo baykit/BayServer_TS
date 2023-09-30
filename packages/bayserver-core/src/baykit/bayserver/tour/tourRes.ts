@@ -187,7 +187,7 @@ export class TourRes implements Reusable{
         }
 
         try {
-            this.tour.ship.sendEndTour(this.tour.shipId, chkId, this.tour, callback);
+            this.tour.ship.sendEndTour(this.tour.shipId, this.tour, callback);
         }
         catch(e) {
             BayLog.error_e(e)

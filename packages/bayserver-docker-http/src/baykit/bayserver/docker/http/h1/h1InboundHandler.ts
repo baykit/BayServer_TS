@@ -191,10 +191,6 @@ export class H1InboundHandler extends H1ProtocolHandler implements InboundHandle
         BayLog.debug("%s Get tour(reqid=%d): %s", sip, this.curReqId, tur)
         if(!tur.isPreparing())
             throw new Error(tur + " Invalid tour state: " + tur.state)
-        this.curTour = tur;
-        this.curTourId = tur.tourId;
-        this.curReqId = (this.curReqId + 1) & 0xffffff;  // issue new request id
-
         if(tur == null) {
             BayLog.error(BayMessage.get(Symbol.INT_NO_MORE_TOURS));
             tur = sip.getTour(this.curReqId, true);
@@ -202,6 +198,10 @@ export class H1InboundHandler extends H1ProtocolHandler implements InboundHandle
             //sip.agent.shutdown(false);
             return NextSocketAction.CONTINUE;
         }
+        
+        this.curTour = tur;
+        this.curTourId = tur.tourId;
+        this.curReqId = (this.curReqId + 1) & 0xffffff;  // issue new request id
 
         sip.keeping = false;
 

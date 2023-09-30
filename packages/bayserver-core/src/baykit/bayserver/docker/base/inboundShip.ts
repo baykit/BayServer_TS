@@ -219,7 +219,7 @@ export class InboundShip extends Ship {
         if(tur.isZombie() || tur.isAborted()) {
             // Don't send peer any data. Do nothing
             BayLog.debug("%s Aborted or zombie tour. do nothing: %s state=%s", this, tur, tur.state);
-            tur.changeState(chkId, Tour.STATE_ENDED);
+            tur.changeState(Tour.TOUR_ID_NOCHECK, Tour.STATE_ENDED);
             if(lis != null)
                 lis();
             return;
@@ -227,8 +227,8 @@ export class InboundShip extends Ship {
 
         let maxLen = this.protocolHandler.maxResPacketDataSize();
         if(len > maxLen) {
-            this.sendResContent(Tour.TOUR_ID_NOCHECK, tur, buf, ofs, maxLen, null);
-            this.sendResContent(Tour.TOUR_ID_NOCHECK, tur, buf, ofs + maxLen, len - maxLen, lis);
+            this.sendResContent(Ship.SHIP_ID_NOCHECK, tur, buf, ofs, maxLen, null);
+            this.sendResContent(Ship.SHIP_ID_NOCHECK, tur, buf, ofs + maxLen, len - maxLen, lis);
         }
         else {
             try {
@@ -242,7 +242,7 @@ export class InboundShip extends Ship {
     }
 
 
-    sendEndTour(chkShipId: number, chkTourId: number, tur: Tour, callback: () => void) {
+    sendEndTour(chkShipId: number, tur: Tour, callback: () => void) {
         this.checkShipId(chkShipId);
 
         BayLog.debug("%s sendEndTour: %s state=%s", this, tur, tur.state);
@@ -250,7 +250,7 @@ export class InboundShip extends Ship {
         if(tur.isZombie() || tur.isAborted()) {
             // Don't send peer any data. Only return tour
             BayLog.debug("%s Aborted or zombie tour. do nothing: %s state=%s", this, tur, tur.state)
-            tur.changeState(chkTourId, Tour.STATE_ENDED)
+            tur.changeState(Tour.TOUR_ID_NOCHECK, Tour.STATE_ENDED)
             callback();
         }
         else {
@@ -271,7 +271,7 @@ export class InboundShip extends Ship {
             }
 
             //BayLog.trace("%s sendEndTour: set running false: %s id=%d", this, tur, chkTourId);
-            tur.changeState(chkTourId, Tour.STATE_ENDED);
+            tur.changeState(Tour.TOUR_ID_NOCHECK, Tour.STATE_ENDED);
 
             (this.protocolHandler as Object as InboundHandler).sendEndTour(tur, keepAlive, callback);
         }
