@@ -1,12 +1,12 @@
 {
   "name": "bayserver-core",
-  "version": "2.2.0",
-  "description": "BayServer for Typescript",
+  "version": "2.2.3",
+  "description": "BayServer is one of the high-speed web servers. It operates as a single-threaded, asynchronous server, which makes it exceptionally fast. It also supports multi-core processors, harnessing the full potential of the CPU's capabilities.\n",
   "main": "out/baykit/bayserver/bayserver.js",
   "types": "out/baykit/bayserver/bayserver.d.ts",
   "scripts": {
-    "run": "./node_modules/.bin/ts-node",
-    "build": "tsc"
+    "build": "tsc",
+    "clean": "rm -rf baykit/"
   },
   "author": "Yokohama Baykit",
   "license": "Baykit Public Lisence",
