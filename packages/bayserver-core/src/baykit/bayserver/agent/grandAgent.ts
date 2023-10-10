@@ -108,7 +108,12 @@ export class GrandAgent {
 
     printUsage() {
         // print memory usage
-        BayLog.info("Agent#%d MemUsage", this.agentId);
+        BayLog.info("%s MemUsage", this);
+        BayLog.info("  Node.js information: %s", JSON.stringify(process.versions, null, 2))
+        const memoryUsage = process.memoryUsage();
+        BayLog.info("  HeapTotal: %s Bytes", memoryUsage.heapTotal.toLocaleString('en-US'))
+        BayLog.info("  HeapUsed: %s Bytes", memoryUsage.heapUsed.toLocaleString('en-US'))
+        BayLog.info("  External: %s Bytes", memoryUsage.external.toLocaleString('en-US'))
         MemUsage.get(this.agentId).printUsage(1);
     }
 
