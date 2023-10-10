@@ -10,16 +10,18 @@ export class CgiStdErrYacht extends Yacht {
     tour: Tour
 
     tourId: number
+    timeoutSec: number
 
     constructor() {
         super();
         this.reset()
     }
 
-    init(tur: Tour) {
+    init(tur: Tour, timeoutSec: number) {
         super.initYacht();
         this.tour = tur;
         this.tourId = tur.tourId;
+        this.timeoutSec = timeoutSec
     }
 
     toString(): string {
@@ -49,23 +51,30 @@ export class CgiStdErrYacht extends Yacht {
     }
 
     notifyEof(): number {
-        BayLog.debug("%s CGI StdErr: EOF\\(^o^)/", this);
+        BayLog.debug("%s CGI StdErr: EOF\\(^o^)/", this.tour);
         return NextSocketAction.CLOSE;
     }
 
     notifyError(err: Error): void {
-        BayLog.error_e(err, "%s CGI StdErr: Error(>_<): %s", this, err.message);
+        BayLog.error_e(err, "%s CGI StdErr: Error(>_<): %s", this.tour, err.message);
         this.tour.res.sendError(this.tourId);
     }
 
     notifyClose() {
-        BayLog.debug("%s CGI StdErr: notifyClose", this);
+        BayLog.debug("%s CGI StdErr: notifyClose", this.tour);
         this.tour.checkTourId(this.tourId);
         (this.tour.req.contentHandler as CgiReqContentHandler).stdErrClosed();
     }
 
     checkTimeout(durationSec: number): boolean {
-        throw new Sink("%s invalid timeout check", this)
+        BayLog.debug("%s Check StdErr timeout: dur=%d, timeout=%d", this.tour, durationSec, this.timeoutSec)
+        if (this.timeoutSec <= 0) {
+            BayLog.debug("%s invalid timeout check", this.tour)
+            return false
+        }
+        else {
+            return durationSec > this.timeoutSec
+        }
     }
 
 

@@ -24,6 +24,8 @@ export class CgiReqContentHandler implements ReqContentHandler{
         this.cgiDocker = cgiDocker;
         this.tour = tour;
         this.tourId = tour.id()
+        this.isStdOutClosed = true;
+        this.isStdErrClosed = true;
     }
 
 
@@ -83,12 +85,14 @@ export class CgiReqContentHandler implements ReqContentHandler{
             this.execError = err
         })
         this.childProcess.on("exit", (code) => {
-            BayLog.debug("%s exit process: %d", this.tour, code)
+            if(code == null)
+                code = -1
+            BayLog.debug("%s exit process: pid=%d code=%d", this.tour, this.childProcess.pid, code)
             this.exitCode = code
             this.processFinished()
         })
         this.childProcess.on("spawn", () => {
-            BayLog.debug("Process spawned")
+            BayLog.debug("%s Process spawned: pid=%s", this.tour, this.childProcess.pid)
         })
 
         this.cgiDocker.onProcessStarted(this.tour, this)
@@ -109,6 +113,8 @@ export class CgiReqContentHandler implements ReqContentHandler{
     }
 
     private processFinished() {
+        BayLog.debug("%s CGI Process finished (done=%s closed=%s exited=%s", this.tour, this.finished, this.isClosed(), this.isExited());
+
         if(this.finished)
             return
 
@@ -118,7 +124,7 @@ export class CgiReqContentHandler implements ReqContentHandler{
         try {
             BayLog.trace(this.tour + " CGITask: process ended");
 
-            BayLog.debug("%s CGI Process finished: code=%d", this.tour, this.exitCode);
+            BayLog.debug("%s CGI Process exit code=%d", this.tour, this.exitCode);
 
             if(this.execError) {
                 BayLog.error("%s CGI Spawn error", this.tour);

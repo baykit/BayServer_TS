@@ -105,13 +105,13 @@ export class CgiDocker extends ClubBase {
 
         let outTp = new PlainTransporter(false, bufsize);
         let outCh = new ChannelWrapper(handler.childProcess.stdout)
-        outYat.init(tur, outTp);
+        outYat.init(tur, outTp, handler.childProcess, this.timeoutSec);
         outTp.init(tur.ship.agent.nonBlockingHandler, outCh, outYat);
         outTp.openValve();
 
         let errTp = new PlainTransporter(false, bufsize);
         let errCh = new ChannelWrapper(handler.childProcess.stderr)
-        errYat.init(tur);
+        errYat.init(tur, this.timeoutSec);
         errTp.init(tur.ship.agent.nonBlockingHandler, errCh, errYat);
         errTp.openValve();
     }

@@ -8,6 +8,7 @@ import {CharUtil} from "bayserver-core/baykit/bayserver/util/charUtil";
 import {StrUtil} from "bayserver-core/baykit/bayserver/util/strUtil";
 import {BayServer} from "bayserver-core/baykit/bayserver/bayserver";
 import {Valve} from "bayserver-core/baykit/bayserver/util/valve";
+import {ChildProcess} from "child_process";
 
 export class CgiStdOutYacht extends Yacht {
     fileWroteLen: number
@@ -18,15 +19,20 @@ export class CgiStdOutYacht extends Yacht {
     remain: string = ""
     headerReading: boolean
 
+    timeoutSec: number
+    process: ChildProcess
+
     constructor() {
         super();
         this.reset()
     }
 
-    init(tur: Tour, vv: Valve) {
+    init(tur: Tour, vv: Valve, process: ChildProcess, timeoutSec: number) {
         super.initYacht();
         this.tour = tur;
         this.tourId = tur.tourId;
+        this.process = process
+        this.timeoutSec = timeoutSec
         tur.res.setConsumeListener((len, resume)=> {
             if(resume) {
                 vv.openValve();
@@ -35,7 +41,7 @@ export class CgiStdOutYacht extends Yacht {
     }
 
     toString(): string {
-        return "CGIOutYat#{" + this.yachtId + "/" + this.objectId + " tour=" + this.tour + " id=" + this.tourId;
+        return "CGIOutYat#" + this.yachtId + "/" + this.objectId + " tour=" + this.tour + " id=" + this.tourId;
     }
 
     //////////////////////////////////////////////////////
@@ -48,6 +54,8 @@ export class CgiStdOutYacht extends Yacht {
         this.tour = null;
         this.headerReading = true
         this.remain = ""
+        this.timeoutSec = 0
+        this.process = null
     }
 
     //////////////////////////////////////////////////////
@@ -127,23 +135,34 @@ export class CgiStdOutYacht extends Yacht {
     }
 
     notifyEof(): number {
-        BayLog.debug("%s CGI StdOut: EOF\\(^o^)/", this);
+        BayLog.debug("%s CGI StdOut: EOF\\(^o^)/", this.tour);
         return NextSocketAction.CLOSE;
     }
 
     notifyError(err: Error): void {
-        BayLog.error_e(err, "%s CGI StdOut: Error(>_<): %s", this, err.message);
+        BayLog.error_e(err, "%s CGI StdOut: Error(>_<): %s", this.tour, err.message);
         this.tour.res.sendError(this.tourId);
     }
 
     notifyClose() {
-        BayLog.debug("%s CGI StdOut: notifyClose", this);
+        BayLog.debug("%s CGI StdOut: notifyClose", this.tour);
         this.tour.checkTourId(this.tourId);
         (this.tour.req.contentHandler as CgiReqContentHandler).stdOutClosed();
     }
 
     checkTimeout(durationSec: number): boolean {
-        throw new Sink("%s invalid timeout check", this)
+        BayLog.debug("%s Check StdOut timeout: dur=%d, timeout=%d", this.tour, durationSec, this.timeoutSec)
+
+        if (this.timeoutSec <= 0) {
+            BayLog.debug("%s invalid timeout check", this.tour)
+        }
+        else if (durationSec > this.timeoutSec) {
+            // Kill cgi process instead of handing timeout
+            BayLog.warn("%s Kill process!: %s", this.tour, this.process.pid)
+            this.process.kill("SIGKILL")
+            return true
+        }
+        return false
     }
 
 
