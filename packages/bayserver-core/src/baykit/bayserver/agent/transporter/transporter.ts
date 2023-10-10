@@ -146,7 +146,7 @@ export abstract class Transporter implements ChannelListener, Reusable, Valve, P
                     return NextSocketAction.CLOSE;
             }
             else {
-                this.onError(ch, e)
+                BayLog.error_e(e, "%s Error on notifying read or eof", this.dataListener)
                 return NextSocketAction.CLOSE
             }
         }

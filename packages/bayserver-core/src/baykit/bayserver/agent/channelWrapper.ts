@@ -24,4 +24,14 @@ export class ChannelWrapper {
             this.fd = ch
         }
     }
+
+    toString(): string {
+        if (this.type == ChannelWrapper.TYPE_SOCKET) {
+            return this.socket.toString()
+        } else if (this.type == ChannelWrapper.TYPE_READABLE) {
+            return this.readable.toString()
+        } else {
+            return this.fd.toString()
+        }
+    }
 }
