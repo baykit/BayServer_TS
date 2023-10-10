@@ -1,6 +1,6 @@
 {
   "name": "bayserver",
-  "version": "2.2.3",
+  "version": "2.3.0",
   "description": "BayServer is one of the high-speed web servers. It operates as a single-threaded, asynchronous server, which makes it exceptionally fast. It also supports multi-core processors, harnessing the full potential of the CPU's capabilities.\n",
   "main": "bootstrap.js",
   "bin": {
@@ -18,12 +18,12 @@
   "dependencies": {
     "process": "^0.11.10",
     "typescript": "^4.9.4",
-    "bayserver-core": "2.2.3",
-    "bayserver-docker-ajp": "2.2.3",
-    "bayserver-docker-fcgi": "2.2.3",
-    "bayserver-docker-cgi": "2.2.3",
-    "bayserver-docker-http": "2.2.3",
-    "bayserver-docker-wordpress": "2.2.3",
+    "bayserver-core": "2.3.0",
+    "bayserver-docker-ajp": "2.3.0",
+    "bayserver-docker-fcgi": "2.3.0",
+    "bayserver-docker-cgi": "2.3.0",
+    "bayserver-docker-http": "2.3.0",
+    "bayserver-docker-wordpress": "2.3.0",
     "ts-node": "^10.9.1"
   }
 }
