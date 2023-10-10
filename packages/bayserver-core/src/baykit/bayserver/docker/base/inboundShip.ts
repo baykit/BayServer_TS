@@ -216,9 +216,9 @@ export class InboundShip extends Ship {
     sendResContent(chkId: number, tur: Tour, buf: Buffer, ofs: number, len: number, lis: () => void) {
         this.checkShipId(chkId);
 
-        if(tur.isZombie() || tur.isAborted()) {
+        if(tur.isZombie() || tur.isAborted() || tur.isEnded()) {
             // Don't send peer any data. Do nothing
-            BayLog.debug("%s Aborted or zombie tour. do nothing: %s state=%s", this, tur, tur.state);
+            BayLog.debug("%s Non-Running tour. do nothing: %s state=%s", this, tur, tur.state);
             tur.changeState(Tour.TOUR_ID_NOCHECK, Tour.STATE_ENDED);
             if(lis != null)
                 lis();
@@ -247,9 +247,9 @@ export class InboundShip extends Ship {
 
         BayLog.debug("%s sendEndTour: %s state=%s", this, tur, tur.state);
 
-        if(tur.isZombie() || tur.isAborted()) {
+        if(tur.isZombie() || tur.isAborted() || tur.isEnded()) {
             // Don't send peer any data. Only return tour
-            BayLog.debug("%s Aborted or zombie tour. do nothing: %s state=%s", this, tur, tur.state)
+            BayLog.debug("%s Non-Running tour. do nothing: %s state=%s", this, tur, tur.state)
             tur.changeState(Tour.TOUR_ID_NOCHECK, Tour.STATE_ENDED)
             callback();
         }
