@@ -36,7 +36,10 @@ export abstract class Yacht implements DataListener, Reusable{
         throw new Sink()
     }
 
-    abstract checkTimeout(durationSec: number): boolean;
+    checkTimeout(durationSec: number): boolean {
+        return false
+    }
+
     abstract notifyClose()
     abstract notifyEof(): number
     abstract notifyError(err: Error): void

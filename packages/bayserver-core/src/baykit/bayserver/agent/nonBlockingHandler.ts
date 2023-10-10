@@ -28,7 +28,7 @@ class ChannelState {
     }
 
     access() {
-        this.lastAccessTime = new Date().getDate()
+        this.lastAccessTime = Date.now()
     }
 
     toString(): string {
@@ -173,6 +173,28 @@ export class NonBlockingHandler {
         this.closeChannel(chState)
     }
 
+
+    closeTimeoutSockets() {
+        if(this.chStates.length == 0)
+            return
+
+        let closeList = []
+        let now =  Date.now()
+        for(const chState of this.chStates) {
+            if(chState.listener != null) {
+                let durationSec = Math.floor((now - chState.lastAccessTime) / 1000)
+                if (chState.listener.checkTimeout(chState.ch, durationSec)) {
+                    BayLog.debug("%s timed out channel found: ch=%s", this.agent, chState.ch)
+                    closeList.push(chState)
+                }
+            }
+        }
+
+        for(const chState of closeList) {
+            this.closeChannel(chState)
+        }
+    }
+
     closeAll(): void {
         for(const chState of this.chStates) {
             this.closeChannel(chState)
@@ -244,7 +266,7 @@ export class NonBlockingHandler {
             let chState = this.findChannelState(ch)
             if(chState == null || chState.closing) {
                 // channel is already closed
-                BayLog.warn("Channel is closed: buflen=%d", buf.length)
+                BayLog.warn("Channel is already closed: buflen=%d", buf.length)
                 return
             }
             try {

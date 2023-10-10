@@ -83,10 +83,6 @@ export class SendFileYacht extends Yacht {
         BayLog.debug("File closed: %s", this.file);
     }
 
-    checkTimeout(durationSec: number): boolean {
-        throw new Sink();
-    }
-
     private checkInitialized() {
         if(this.tour == null)
             throw new Sink("Invalid yacht")

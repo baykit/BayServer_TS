@@ -49,7 +49,7 @@ export abstract class Boat implements DataListener {
     abstract notifyClose(): void;
 
     checkTimeout(durationSec: number): boolean {
-        throw new Sink();
+        return false
     }
 
     static initClass() {

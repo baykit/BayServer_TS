@@ -33,7 +33,7 @@ export class InboundDataListener implements DataListener{
         else
             timeout = durationSec >= this.ship.socketTimeoutSec;
 
-        BayLog.debug("%s Check timeout: dur=%d, timeout=%b, keeping=%b limit=%d keeplim=%d",
+        BayLog.debug("%s Check timeout: dur=%d, timeout=%s, keeping=%s limit=%d keeplim=%d",
             this, durationSec, timeout, this.ship.keeping, this.ship.socketTimeoutSec, BayServer.harbor.getKeepTimeoutSec());
         return timeout;
     }

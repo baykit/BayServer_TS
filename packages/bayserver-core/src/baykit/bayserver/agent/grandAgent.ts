@@ -7,11 +7,45 @@ import {NonBlockingHandler} from "./nonBlockingHandler";
 import {MemUsage} from "../memUsage";
 import {CommandReceiver} from "./commandReceiver";
 import {BayServer} from "../bayserver";
-import {exit} from "process";
+import {abort, exit} from "process";
 import {fork} from "child_process";
 
 
+class TimeoutChecker {
+    private timerId: NodeJS.Timeout | null = null;
+    private static readonly INTERVAL_SEC = 10;
+    private interval_sec: number = 10;
+    private agent: GrandAgent;
+
+    constructor(agt: GrandAgent, interval_sec: number) {
+        this.agent = agt;
+        this.interval_sec = interval_sec;
+        this.startTimer();
+    }
+
+    private startTimer() {
+        this.timerId = setInterval(() => {
+            try {
+                this.agent.onTimer();
+            }
+            catch(e) {
+                this.agent.abort(e)
+            }
+        }, this.interval_sec * 1000);
+    }
+
+    stopTimer() {
+        if (this.timerId !== null) {
+            clearInterval(this.timerId);
+            this.timerId = null;
+        }
+    }
+}
+
+
 export class GrandAgent {
+
+    static readonly SELECT_TIMEOUT_SEC = 10
 
     static readonly CMD_OK = 0
     static readonly CMD_CLOSE = 1
@@ -41,6 +75,7 @@ export class GrandAgent {
 
     commandReceiver: CommandReceiver
     aborted: boolean = false
+    timer: TimeoutChecker
 
 
     private constructor(
@@ -56,10 +91,15 @@ export class GrandAgent {
         this.anchorable = anchorable
         this.nonBlockingHandler = new NonBlockingHandler(this)
         this.maxInboundShips = maxShips
+        this.timer = new TimeoutChecker(this, GrandAgent.SELECT_TIMEOUT_SEC)
     }
 
     toString(): string {
         return "agt#" + this.agentId
+    }
+
+    onTimer() {
+        this.nonBlockingHandler.closeTimeoutSockets()
     }
 
     reloadCert() {
@@ -85,6 +125,7 @@ export class GrandAgent {
             BayLog.fatal_e(err)
         }
 
+        this.timer.stopTimer()
         this.commandReceiver.end()
         for(const lis of GrandAgent.listeners)
             lis.remove(this.agentId)
