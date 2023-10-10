@@ -23,6 +23,10 @@ else
 fi
 echo tag=$tag
 
+if [ "$1" != "1" ]; then
+  exit
+fi
+
 cd packages
 for d in *; do
   publish $d
