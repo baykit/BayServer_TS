@@ -10,22 +10,22 @@ export class CgiStdErrYacht extends Yacht {
     tour: Tour
 
     tourId: number
-    timeoutSec: number
+    handler: CgiReqContentHandler
 
     constructor() {
         super();
         this.reset()
     }
 
-    init(tur: Tour, timeoutSec: number) {
-        super.initYacht();
-        this.tour = tur;
-        this.tourId = tur.tourId;
-        this.timeoutSec = timeoutSec
+    init(tur: Tour, handler: CgiReqContentHandler) {
+        super.initYacht()
+        this.tour = tur
+        this.tourId = tur.tourId
+        this.handler = handler
     }
 
     toString(): string {
-        return "CGIErrYat#{" + this.yachtId + "/" + this.objectId + " tour=" + this.tour + " id=" + this.tourId;
+        return "CGIErrYat#{" + this.yachtId + "/" + this.objectId + " tour=" + this.tour + " id=" + this.tourId
     }
 
     //////////////////////////////////////////////////////
@@ -33,8 +33,9 @@ export class CgiStdErrYacht extends Yacht {
     //////////////////////////////////////////////////////
 
     reset() {
-        this.tourId = 0;
-        this.tour = null;
+        this.tourId = 0
+        this.tour = null
+        this.handler = null
     }
 
     //////////////////////////////////////////////////////
@@ -47,6 +48,7 @@ export class CgiStdErrYacht extends Yacht {
         if(msg.length > 0)
             BayLog.error("CGI Stderr: %s", msg);
 
+        this.handler.access()
         return NextSocketAction.CONTINUE;
     }
 
@@ -67,14 +69,8 @@ export class CgiStdErrYacht extends Yacht {
     }
 
     checkTimeout(durationSec: number): boolean {
-        BayLog.debug("%s Check StdErr timeout: dur=%d, timeout=%d", this.tour, durationSec, this.timeoutSec)
-        if (this.timeoutSec <= 0) {
-            BayLog.debug("%s invalid timeout check", this.tour)
-            return false
-        }
-        else {
-            return durationSec > this.timeoutSec
-        }
+        BayLog.debug("%s Check StdErr timeout: dur=%d", this.tour, durationSec)
+        return this.handler.timedOut()
     }
 
 

@@ -19,20 +19,18 @@ export class CgiStdOutYacht extends Yacht {
     remain: string = ""
     headerReading: boolean
 
-    timeoutSec: number
-    process: ChildProcess
+    handler: CgiReqContentHandler
 
     constructor() {
         super();
         this.reset()
     }
 
-    init(tur: Tour, vv: Valve, process: ChildProcess, timeoutSec: number) {
+    init(tur: Tour, vv: Valve, handler: CgiReqContentHandler) {
         super.initYacht();
-        this.tour = tur;
-        this.tourId = tur.tourId;
-        this.process = process
-        this.timeoutSec = timeoutSec
+        this.tour = tur
+        this.tourId = tur.tourId
+        this.handler = handler
         tur.res.setConsumeListener((len, resume)=> {
             if(resume) {
                 vv.openValve();
@@ -54,8 +52,7 @@ export class CgiStdOutYacht extends Yacht {
         this.tour = null;
         this.headerReading = true
         this.remain = ""
-        this.timeoutSec = 0
-        this.process = null
+        this.handler = null
     }
 
     //////////////////////////////////////////////////////
@@ -128,6 +125,7 @@ export class CgiStdOutYacht extends Yacht {
             }
         }
 
+        this.handler.access()
         if(available)
             return NextSocketAction.CONTINUE;
         else
@@ -151,15 +149,12 @@ export class CgiStdOutYacht extends Yacht {
     }
 
     checkTimeout(durationSec: number): boolean {
-        BayLog.debug("%s Check StdOut timeout: dur=%d, timeout=%d", this.tour, durationSec, this.timeoutSec)
+        BayLog.debug("%s Check StdOut timeout: dur=%d", this.tour, durationSec)
 
-        if (this.timeoutSec <= 0) {
-            BayLog.debug("%s invalid timeout check", this.tour)
-        }
-        else if (durationSec > this.timeoutSec) {
+        if (this.handler.timedOut()) {
             // Kill cgi process instead of handing timeout
-            BayLog.warn("%s Kill process!: %s", this.tour, this.process.pid)
-            this.process.kill("SIGKILL")
+            BayLog.warn("%s Kill process!: %s", this.tour, this.handler.childProcess.pid)
+            this.handler.childProcess.kill("SIGKILL")
             return true
         }
         return false

@@ -18,6 +18,7 @@ export class CgiReqContentHandler implements ReqContentHandler{
     private finished: boolean = false;
     private exitCode: number = null
     private execError: Error = null
+    private lastAccess: number
 
 
     constructor(cgiDocker: CgiDocker, tour: Tour) {
@@ -26,6 +27,7 @@ export class CgiReqContentHandler implements ReqContentHandler{
         this.tourId = tour.id()
         this.isStdOutClosed = true;
         this.isStdErrClosed = true;
+        this.access()
     }
 
 
@@ -44,10 +46,12 @@ export class CgiReqContentHandler implements ReqContentHandler{
             else
                 tur.req.consumed(Tour.TOUR_ID_NOCHECK, len);
         });
+        this.access()
     }
 
     onEndContent(tur: Tour): void {
         BayLog.debug("%s CGI:endReqContent", tur);
+        this.access()
     }
 
     onAbort(tur: Tour): boolean {
@@ -98,6 +102,7 @@ export class CgiReqContentHandler implements ReqContentHandler{
         this.cgiDocker.onProcessStarted(this.tour, this)
         this.isStdOutClosed = false;
         this.isStdErrClosed = false;
+        this.access()
     }
 
     stdOutClosed() {
@@ -110,6 +115,19 @@ export class CgiReqContentHandler implements ReqContentHandler{
         this.isStdErrClosed = true
         if(this.isStdOutClosed && this.isStdErrClosed)
             this.processFinished()
+    }
+
+    access(): void {
+        this.lastAccess = Date.now()
+    }
+
+    timedOut() : boolean {
+        if(this.cgiDocker.timeoutSec <= 0)
+            return false
+
+        let durationSec = (Date.now() - this.lastAccess) / 1000
+        BayLog.debug("%s Check CGI timeout: dur=%d, timeout=%d", this.tour, durationSec, this.cgiDocker.timeoutSec)
+        return durationSec > this.cgiDocker.timeoutSec
     }
 
     private processFinished() {

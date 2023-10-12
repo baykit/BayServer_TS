@@ -100,6 +100,12 @@ export class NonBlockingHandler {
     askToRead(ch: ChannelWrapper) {
         BayLog.debug("%s askToRead", this.agent);
 
+        let chState = this.findChannelState(ch)
+        if(chState == null) {
+            BayLog.warn("%s channel state not found: %s", this.agent, ch)
+            return
+        }
+
         if(ch.type == ChannelWrapper.TYPE_SOCKET) {
             if (ch.socket.isPaused())
                 ch.socket.resume() // read on
@@ -109,13 +115,20 @@ export class NonBlockingHandler {
                 ch.readable.resume() // read on
         }
         else {
-            let chState = this.findChannelState(ch)
             this.readFs(chState)
         }
+
+        chState.access()
     }
 
     askToWrite(buf: Buffer, ch: ChannelWrapper, listener: DataConsumeListener) : void {
         BayLog.debug("%s askToWrite: len=%d", this.agent, buf.length);
+
+        let chState = this.findChannelState(ch)
+        if(chState == null) {
+            BayLog.warn("%s channel state not found: %s", this.agent, ch)
+            return
+        }
 
         if(ch.type == ChannelWrapper.TYPE_SOCKET) {
             ch.socket.write(buf, (err) => {
@@ -165,12 +178,20 @@ export class NonBlockingHandler {
                 }
             })
         }
+        chState.access()
     }
 
     askToClose(ch: ChannelWrapper) {
         let chState = this.findChannelState(ch)
         BayLog.debug("%s askToClose chState=%s", this.agent, chState);
+
+        if(chState == null) {
+            BayLog.warn("%s channel state not found: %s", this.agent, ch)
+            return
+        }
+
         this.closeChannel(chState)
+        chState.access()
     }
 
 
@@ -412,6 +433,7 @@ export class NonBlockingHandler {
                 }
                 break
         }
+        chState.access()
     }
 
     private readFs(chState: ChannelState) {

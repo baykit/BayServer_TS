@@ -160,7 +160,7 @@ export class TourReq implements Reusable {
 
         this.bytesPosted += len;
 
-        BayLog.debug("%s rread content: len=%d posted=%d limit=%d consumed=%d available=%s",
+        BayLog.debug("%s read content: len=%d posted=%d limit=%d consumed=%d available=%s",
                 this.tour, len, this.bytesPosted, this.bytesLimit, this.bytesConsumed, this.available);
 
         if(this.tour.error == null)
