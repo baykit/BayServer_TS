@@ -66,6 +66,7 @@ export class SignalSender {
      */
     private send(host: string, port: number, cmd: string) {
         let skt = new net.Socket()
+        skt.setTimeout(30 * 1000)
         skt.connect(port, host, () => {
             skt.write(cmd + "\n", (err) => {
 
