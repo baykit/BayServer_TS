@@ -1,5 +1,9 @@
 # BayServer for TypeScript
 
+# 2.3.2
+
+- [core] Fixes memory leaks on exceptional code paths.
+
 # 2.3.1
 
 - [core] Fixes the issue of timeouts occurring when uploading large file

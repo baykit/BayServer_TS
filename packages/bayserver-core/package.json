@@ -1,6 +1,6 @@
 {
   "name": "bayserver-core",
-  "version": "2.3.1",
+  "version": "2.3.2",
   "description": "BayServer is one of the high-speed web servers. It operates as a single-threaded, asynchronous server, which makes it exceptionally fast. It also supports multi-core processors, harnessing the full potential of the CPU's capabilities.\n",
   "main": "out/baykit/bayserver/bayserver.js",
   "types": "out/baykit/bayserver/bayserver.d.ts",
