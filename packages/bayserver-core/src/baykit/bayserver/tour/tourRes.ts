@@ -15,6 +15,8 @@ import {BayLog} from "../bayLog";
 import {Sink} from "../sink";
 import {ProtocolException} from "../protocol/protocolException";
 import {ChannelWrapper} from "../agent/channelWrapper";
+import {IOException} from "../util/ioException";
+import {InboundHandler} from "../docker/base/inboundHandler";
 
 export class TourRes implements Reusable{
 
@@ -102,9 +104,18 @@ export class TourRes implements Reusable{
                 }
             }
         }
-        this.tour.ship.sendHeaders(this.tour.shipId, this.tour);
 
-        this.headerSent = true;
+        try {
+            this.tour.ship.sendHeaders(this.tour.shipId, this.tour);
+        }
+        catch(e) {
+            BayLog.debug("%s Error on sending headers: %s", this.tour, e.message);
+            this.tour.changeState(Tour.TOUR_ID_NOCHECK, Tour.STATE_ABORTED);
+            throw e;
+        }
+        finally {
+            this.headerSent = true;
+        }
     }
 
 
@@ -140,23 +151,31 @@ export class TourRes implements Reusable{
         if (this.resConsumeListener == null)
             throw new Sink("Response consume listener is null");
 
-        if (this.canCompress) {
-            //this.getCompressor().compress(buf, ofs, len, lis);
-        } else {
-            try {
-                this.tour.ship.sendResContent(this.tour.shipId, this.tour, buf, ofs, len, lis);
-            }
-            catch(e) {
-                lis();
-                throw e;
-            }
-        }
         this.bytesPosted += len;
-
         BayLog.debug("%s posted res content len=%d posted=%d limit=%d consumed=%d",
             this.tour, len, this.bytesPosted, this.bytesLimit, this.bytesConsumed);
         if (this.bytesLimit > 0 && this.bytesPosted > this.bytesLimit) {
             throw new ProtocolException("Post data exceed content-length: " + this.bytesPosted + "/" + this.bytesLimit);
+        }
+
+        if(this.tour.isZombie() || this.tour.isAborted()) {
+            // Don't send peer any data. Do nothing
+            BayLog.debug("%s Aborted or zombie tour. do nothing: %s state=%s", this, this.tour, this.tour.state)
+            lis()
+        }
+        else {
+            if (this.canCompress) {
+                //this.getCompressor().compress(buf, ofs, len, lis);
+            } else {
+                try {
+                    this.tour.ship.sendResContent(this.tour.shipId, this.tour, buf, ofs, len, lis);
+                }
+                catch(e) {
+                    lis()
+                    this.tour.changeState(Tour.TOUR_ID_NOCHECK, Tour.STATE_ABORTED);
+                    throw e;
+                }
+            }
         }
 
         let oldAvailable: boolean = this.available;
@@ -172,6 +191,10 @@ export class TourRes implements Reusable{
         this.tour.checkTourId(chkId);
 
         BayLog.debug("%s end ResContent", this);
+        if (this.tour.isEnded()) {
+            BayLog.debug("%s Tour is already ended (Ignore).", this)
+            return
+        }
 
         if (!this.tour.isZombie() && this.tour.city != null)
             this.tour.city.log(this.tour);
@@ -181,18 +204,41 @@ export class TourRes implements Reusable{
             //this.getCompressor().finish();
         }
 
+        let tourReturned = false
         let callback = () => {
             this.tour.checkTourId(chkId)
             this.tour.ship.returnTour(this.tour);
+            tourReturned = true
         }
 
         try {
-            this.tour.ship.sendEndTour(this.tour.shipId, this.tour, callback);
+            if(this.tour.isZombie() || this.tour.isAborted()) {
+                // Don't send peer any data. Only return tour
+                BayLog.debug("%s Aborted or zombie tour. do nothing: %s state=%s", this, this.tour, this.tour.state)
+                callback();
+            }
+            else {
+                try {
+                    this.tour.ship.sendEndTour(this.tour.shipId, this.tour, callback);
+                }
+                catch (e) {
+                    if(!(e instanceof IOException))
+                        throw e
+                    else {
+                        BayLog.debug("%s Error on sending end tour", this)
+                        callback()
+                        throw e
+                    }
+                }
+            }
         }
-        catch(e) {
-            BayLog.error_e(e)
-            callback();
-            throw e;
+        finally {
+            // If tour is returned, we cannot change its state because
+            // it will become uninitialized.
+            BayLog.debug("%s Tour is returned (id=%d): %s (state=%d)", this, chkId, tourReturned, this.tour.state)
+            if (!tourReturned) {
+                this.tour.changeState(Tour.TOUR_ID_NOCHECK, Tour.STATE_ENDED);
+            }
         }
     }
 
@@ -218,15 +264,33 @@ export class TourRes implements Reusable{
             return;
 
         if(this.headerSent) {
-            BayLog.warn("Try to send error after response header is sent (Ignore)");
-            BayLog.warn("%s: status=%d, message=%s", this, status, message);
+            BayLog.debug("Try to send error after response header is sent (Ignore)");
+            BayLog.debug("%s: status=%d, message=%s", this, status, message);
             if (e != null)
-                BayLog.error_e(e);
+                BayLog.debug_e(e);
         }
         else {
             this.setConsumeListener(ContentConsumeListenerUtil.devNull);
-            this.tour.ship.sendError(this.tour.shipId, this.tour, status, message, e);
-            this.headerSent = true;
+
+            if(this.tour.isZombie() || this.tour.isAborted()) {
+                // Don't send peer any data. Do nothing
+                BayLog.debug("%s Bborted or zombie tour. do nothing: %s state=%s", this, this.tour, this.tour.state)
+            }
+            else {
+                try {
+                    this.tour.ship.sendError(this.tour.shipId, this.tour, status, message, e);
+                }
+                catch(e) {
+                    if(e instanceof IOException) {
+                        BayLog.debug_e(e, "%s IOException while sending error", this)
+                        this.tour.changeState(Tour.TOUR_ID_NOCHECK, Tour.STATE_ABORTED);
+                    }
+                    else {
+                        throw e
+                    }
+                }
+                this.headerSent = true;
+            }
         }
         this.endContent(chkId);
     }
@@ -298,6 +362,7 @@ export class TourRes implements Reusable{
 
         this.endContent(chkId);
     }
+
     private consumed(chkId: number, len: number) {
         this.tour.checkTourId(chkId);
         if (this.resConsumeListener == null)

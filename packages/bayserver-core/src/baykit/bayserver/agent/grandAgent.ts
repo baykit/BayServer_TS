@@ -9,38 +9,8 @@ import {CommandReceiver} from "./commandReceiver";
 import {BayServer} from "../bayserver";
 import {abort, exit} from "process";
 import {fork} from "child_process";
-
-
-class TimeoutChecker {
-    private timerId: NodeJS.Timeout | null = null;
-    private static readonly INTERVAL_SEC = 10;
-    private interval_sec: number = 10;
-    private agent: GrandAgent;
-
-    constructor(agt: GrandAgent, interval_sec: number) {
-        this.agent = agt;
-        this.interval_sec = interval_sec;
-        this.startTimer();
-    }
-
-    private startTimer() {
-        this.timerId = setInterval(() => {
-            try {
-                this.agent.onTimer();
-            }
-            catch(e) {
-                this.agent.abort(e)
-            }
-        }, this.interval_sec * 1000);
-    }
-
-    stopTimer() {
-        if (this.timerId !== null) {
-            clearInterval(this.timerId);
-            this.timerId = null;
-        }
-    }
-}
+import {TimerHandler} from "./timerHandler";
+import {ArrayUtil} from "../util/arrayUtil";
 
 
 export class GrandAgent {
@@ -75,7 +45,10 @@ export class GrandAgent {
 
     commandReceiver: CommandReceiver
     aborted: boolean = false
-    timer: TimeoutChecker
+    private timerHandlers: TimerHandler[]
+    private timerId: NodeJS.Timeout | null = null;
+    private static readonly INTERVAL_SEC = 10;
+    private interval_sec: number = 10;
 
 
     private constructor(
@@ -83,6 +56,7 @@ export class GrandAgent {
         maxShips: number,
         anchorable: boolean) {
         this.agentId = agentId
+        this.timerHandlers = []
 
         if(anchorable) {
             this.acceptHandler = new AcceptHandler(this, GrandAgent.anchorablePortMap);
@@ -91,15 +65,31 @@ export class GrandAgent {
         this.anchorable = anchorable
         this.nonBlockingHandler = new NonBlockingHandler(this)
         this.maxInboundShips = maxShips
-        this.timer = new TimeoutChecker(this, GrandAgent.SELECT_TIMEOUT_SEC)
+        this.startTimer()
     }
 
     toString(): string {
         return "agt#" + this.agentId
     }
 
-    onTimer() {
-        this.nonBlockingHandler.closeTimeoutSockets()
+    private startTimer() {
+        this.timerId = setInterval(() => {
+            try {
+                for (const h of this.timerHandlers) {
+                    h.onTimer()
+                }
+            }
+            catch(e) {
+                this.abort(e)
+            }
+        }, this.interval_sec * 1000);
+    }
+
+    stopTimer() {
+        if (this.timerId !== null) {
+            clearInterval(this.timerId);
+            this.timerId = null;
+        }
     }
 
     reloadCert() {
@@ -130,20 +120,23 @@ export class GrandAgent {
             BayLog.fatal_e(err)
         }
 
-        this.timer.stopTimer()
+        if(this.aborted)
+            return
+
+        this.stopTimer()
         this.commandReceiver.end()
         for(const lis of GrandAgent.listeners)
             lis.remove(this.agentId)
 
         GrandAgent.agents.delete(this.agentId)
 
+        this.aborted = true
         if(BayServer.harbor.isMultiCore())
             setTimeout(() => {
                 exit(status)
             }, 5000)
         else
             this.clean()
-        this.aborted = true
     }
 
     fork(agentId: number, monitorPort: number) {
@@ -169,10 +162,20 @@ export class GrandAgent {
         }
     }
 
+    addTimerHandler(handler: TimerHandler) {
+        this.timerHandlers.push(handler)
+    }
+
+    removeTimerHandler(handler: TimerHandler) {
+        ArrayUtil.remove(handler, this.timerHandlers)
+    }
+
     private clean() {
         this.nonBlockingHandler.closeAll()
         this.agentId = -1
     }
+
+
 
     //////////////////////////////////////////////////////
     // Static methods

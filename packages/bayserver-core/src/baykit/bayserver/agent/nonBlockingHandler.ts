@@ -1,16 +1,16 @@
 import {GrandAgent} from "./grandAgent";
-import * as net from "net";
 import {BayLog} from "../bayLog";
-import * as fs from "fs";
 import {DataConsumeListener} from "../util/dataConsumeListener";
 import {NextSocketAction} from "./nextSocketAction";
 import {Buffer} from "buffer";
 import {ChannelListener} from "./channelListener";
 import {IOException} from "../util/ioException";
 import {Sink} from "../sink";
-import * as tls from "tls";
 import {ArrayUtil} from "../util/arrayUtil";
 import {ChannelWrapper} from "./channelWrapper";
+import {TimerHandler} from "./timerHandler";
+import * as tls from "tls";
+import * as fs from "fs";
 
 class ChannelState {
     readonly ch: ChannelWrapper
@@ -43,7 +43,7 @@ class ChannelState {
     }
 }
 
-export class NonBlockingHandler {
+export class NonBlockingHandler implements TimerHandler {
 
     readonly agent: GrandAgent
     chStates: ChannelState[] = []
@@ -51,7 +51,20 @@ export class NonBlockingHandler {
 
     constructor(agent: GrandAgent) {
         this.agent = agent
+        this.agent.addTimerHandler(this)
     }
+
+
+    //////////////////////////////////////////////////////
+    // Implements TimerHandler
+    //////////////////////////////////////////////////////
+    onTimer(): void {
+        this.closeTimeoutSockets()
+    }
+
+    //////////////////////////////////////////////////////
+    // Custom methods
+    //////////////////////////////////////////////////////
 
     addChannelListener(ch: ChannelWrapper, chLis: ChannelListener) : ChannelState {
         let chState = new ChannelState(ch, chLis)
@@ -147,7 +160,7 @@ export class NonBlockingHandler {
                 let chState = this.findChannelState(ch)
                 if(chState == null || chState.closing) {
                     // channel is already closed
-                    BayLog.warn("Channel is closed: buflen=%d", buf.length)
+                    BayLog.debug("Channel is closed: buflen=%d", buf.length)
                     return
                 }
 
@@ -203,10 +216,21 @@ export class NonBlockingHandler {
         let now =  Date.now()
         for(const chState of this.chStates) {
             if(chState.listener != null) {
-                let durationSec = Math.floor((now - chState.lastAccessTime) / 1000)
-                if (chState.listener.checkTimeout(chState.ch, durationSec)) {
-                    BayLog.debug("%s timed out channel found: ch=%s", this.agent, chState.ch)
-                    closeList.push(chState)
+                try {
+                    let durationSec = Math.floor((now - chState.lastAccessTime) / 1000)
+                    if (chState.listener.checkTimeout(chState.ch, durationSec)) {
+                        BayLog.debug("%s timed out channel found: ch=%s", this.agent, chState.ch)
+                        closeList.push(chState)
+                    }
+                }
+                catch(e) {
+                    if(!(e instanceof IOException))
+                        throw e
+                    else {
+                        BayLog.error_e(e)
+                        closeList.push(chState)
+                    }
+
                 }
             }
         }
@@ -270,7 +294,7 @@ export class NonBlockingHandler {
             let chState = this.findChannelState(ch)
             if(chState == null || chState.closing) {
                 // channel is already closed
-                BayLog.warn_e(err, "Error occured after channel is closed")
+                BayLog.debug_e(err, "%s Error occured after channel is closed", this.agent)
                 return
             }
             try {
@@ -287,7 +311,7 @@ export class NonBlockingHandler {
             let chState = this.findChannelState(ch)
             if(chState == null || chState.closing) {
                 // channel is already closed
-                BayLog.warn("Channel is already closed: buflen=%d", buf.length)
+                BayLog.debug("%s Channel is already closed: buflen=%d", this.agent, buf.length)
                 return
             }
             try {
@@ -301,7 +325,7 @@ export class NonBlockingHandler {
 
         if(ch.socket instanceof tls.TLSSocket)
             ch.socket.on("secureConnect", () => {
-                BayLog.info("Secure connect")
+                BayLog.debug("%s Secure connect", this.agent)
             })
 
         ch.socket.on('end', () => {

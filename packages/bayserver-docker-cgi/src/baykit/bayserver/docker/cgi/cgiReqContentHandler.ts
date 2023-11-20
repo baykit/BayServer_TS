@@ -5,6 +5,7 @@ import {BayLog} from "bayserver-core/baykit/bayserver/bayLog";
 import {HttpStatus} from "bayserver-core/baykit/bayserver/util/httpStatus";
 import {ChildProcess} from "child_process";
 import * as child_process from "child_process";
+import {IOException} from "bayserver-core/baykit/bayserver/util/ioException";
 
 export class CgiReqContentHandler implements ReqContentHandler{
 
@@ -139,6 +140,7 @@ export class CgiReqContentHandler implements ReqContentHandler{
         if(!this.isClosed() || !this.isExited())
             return
 
+        let tourId = this.tour.id()
         try {
             BayLog.trace(this.tour + " CGITask: process ended");
 
@@ -158,7 +160,10 @@ export class CgiReqContentHandler implements ReqContentHandler{
             }
         }
         catch(e) {
-            BayLog.error_e(e, "%s Error on notify CGI status", this.tour);
+            if(e instanceof IOException)
+                BayLog.debug_e(e)
+            else
+                BayLog.error_e(e);
         }
 
         this.finished = true

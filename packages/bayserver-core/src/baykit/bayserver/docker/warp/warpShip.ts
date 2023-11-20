@@ -1,6 +1,5 @@
 import {Ship} from "../../watercraft/ship";
 import {Tour} from "../../tour/tour";
-import * as net from "net";
 import {GrandAgent} from "../../agent/grandAgent";
 import {Transporter} from "../../agent/transporter/transporter";
 import {ProtocolHandler} from "../../protocol/protocolHandler";
@@ -11,7 +10,6 @@ import {WarpDocker} from "./warpDocker";
 import {WarpHandler} from "./warpHandler";
 import {Sink} from "../../sink";
 import {HttpStatus} from "../../util/httpStatus";
-import {CommandPacker} from "../../protocol/commandPacker";
 import {DataConsumeListener} from "../../util/dataConsumeListener";
 import {Command} from "../../protocol/command";
 import {ChannelWrapper} from "../../agent/channelWrapper";
@@ -69,6 +67,8 @@ export class WarpShip extends Ship {
         if(this.tourMap.size != 0)
             BayLog.error("BUG: %s Some tours is active: %s", this, this.tourMap);
         this.connected = false;
+        this.tourMap.clear()
+        this.cmdBuf.length = 0
     }
 
     //////////////////////////////////////////////////////
@@ -167,6 +167,9 @@ export class WarpShip extends Ship {
                     BayLog.error_e(e);
                 }
             }
+            else {
+                tur.res.endContent(Tour.TOUR_ID_NOCHECK)
+            }
         }
         this.tourMap = new Map()
     }
@@ -179,13 +182,22 @@ export class WarpShip extends Ship {
     public post(cmd: Command<any, any, any>, listener: () => void = null): void {
         if(!this.connected)
             this.cmdBuf.push([cmd, listener])
-        else
-            this.protocolHandler.commandPacker.post(this, cmd, listener)
+        else {
+            if(cmd == null)
+                listener()
+            else
+                this.protocolHandler.commandPacker.post(this, cmd, listener)
+        }
     }
 
     public flush() {
         for(const cmdAndLis of this.cmdBuf) {
-            this.protocolHandler.commandPacker.post(this, cmdAndLis[0], cmdAndLis[1])
+            let cmd = cmdAndLis[0]
+            let lis = cmdAndLis[1]
+            if(cmd == null)
+                lis()
+            else
+                this.protocolHandler.commandPacker.post(this, cmd, lis)
         }
         this.cmdBuf = []
     }

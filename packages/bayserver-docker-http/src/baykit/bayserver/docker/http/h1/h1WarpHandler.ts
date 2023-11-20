@@ -204,6 +204,12 @@ export class H1WarpHandler extends H1ProtocolHandler implements WarpHandler {
     }
 
     postWarpEnd(tur: Tour): void {
+        let cmd = new CmdContent(Buffer.alloc(0), 0, 0)
+        let callback = () => {
+            this.ship.agent.nonBlockingHandler.askToRead(this.ship.ch)
+        }
+
+        this.getWarpShip().post(cmd, callback)
     }
 
     verifyProtocol(protocol: string): void {

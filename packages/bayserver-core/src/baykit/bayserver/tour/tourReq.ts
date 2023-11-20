@@ -132,38 +132,42 @@ export class TourReq implements Reusable {
 
     postContent(checkId: number, data: Buffer, start: number, len: number): boolean {
         this.tour.checkTourId(checkId);
+
+        let dataPassed = false
         if(!this.tour.isRunning()) {
             BayLog.debug("%s tour is not running.", this.tour);
-            return true;
         }
 
-        if (this.tour.req.contentHandler == null) {
+        else if (this.tour.req.contentHandler == null) {
             BayLog.warn("%s content read, but no content handler", this.tour);
-            return true;
         }
 
-        if (this.consumeListener == null) {
+        else if (this.consumeListener == null) {
             throw new Sink("Request consume listener is null");
         }
 
-        if (this.bytesPosted + len > this.bytesLimit) {
+        else if (this.bytesPosted + len > this.bytesLimit) {
             throw new ProtocolException(
                 BayMessage.get(
                     Symbol.HTP_READ_DATA_EXCEEDED,
-                    this.bytesPosted + length,
+                    this.bytesPosted + len,
                     this.bytesLimit))
         }
 
-        // If has error, only read content. (Do not call content handler)
-        if(this.tour.error == null)
+        else if(this.tour.error != null)
+            // If has error, only read content. (Do not call content handler)
+            BayLog.debug("%s tour has error.", this.tour)
+
+        else {
             this.contentHandler.onReadContent(this.tour, data, start, len);
+            dataPassed = true
+        }
 
         this.bytesPosted += len;
-
         BayLog.debug("%s read content: len=%d posted=%d limit=%d consumed=%d available=%s",
                 this.tour, len, this.bytesPosted, this.bytesLimit, this.bytesConsumed, this.available);
 
-        if(this.tour.error == null)
+        if(!dataPassed)
             return true;
 
         let oldAvailable = this.available;
@@ -214,23 +218,23 @@ export class TourReq implements Reusable {
     }
 
     abort(): boolean {
-        if(!this.tour.isPreparing()) {
-            BayLog.debug("%s cannot abort non-preparing tour", this.tour)
-            return false
-        }
-
-        BayLog.debug("%s req abort", this.tour);
-        if (this.tour.isAborted())
-            throw new Sink("tour is already aborted");
-
-        let aborted: boolean = true;
-        if (this.tour.isRunning() && this.contentHandler != null)
-            aborted = this.contentHandler.onAbort(this.tour);
-
-        if(aborted)
+        BayLog.debug("%s abort tour", this.tour);
+        if(this.tour.isPreparing()) {
             this.tour.changeState(Tour.TOUR_ID_NOCHECK, Tour.STATE_ABORTED);
-
-        return aborted;
+            return true
+        }
+        else if(this.tour.isRunning()) {
+            let aborted: boolean = true;
+            if (this.contentHandler != null)
+                aborted = this.contentHandler.onAbort(this.tour);
+            if(aborted)
+                this.tour.changeState(Tour.TOUR_ID_NOCHECK, Tour.STATE_ABORTED);
+            return aborted;
+        }
+        else {
+            BayLog.debug("%s tour is already aborted", this.tour);
+            return false;
+        }
     }
 
     private bufferAvailable(): boolean {

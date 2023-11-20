@@ -52,7 +52,7 @@ export class BayLog {
         BayLog.log(BayLog.LOG_LEVEL_WARN, 3, null, fmt, ...args);
     }
 
-    public static warn_e(e: Error, fmt: string, ...args: any[]) {
+    public static warn_e(e: Error, fmt: string = null, ...args: any[]) {
         BayLog.log(BayLog.LOG_LEVEL_WARN, 3, e, fmt, ...args);
     }
 

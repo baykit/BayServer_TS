@@ -51,7 +51,7 @@ export class Tour implements Reusable{
 
     public init(key: number, sip: InboundShip) {
         if(this.isInitialized())
-            throw new Sink(this.ship + " Tour already initialized: " + this);
+            throw new Sink("%s Tour already initialized (state=%d)", this, this.state);
 
         this.ship = sip;
         this.shipId = sip.id();
@@ -115,10 +115,14 @@ export class Tour implements Reusable{
                 city.enter(this);
             }
             catch(e) {
-                if(e instanceof HttpException)
+                this.changeState(Tour.TOUR_ID_NOCHECK, Tour.STATE_ABORTED)
+                if(e instanceof Sink) {
                     throw e;
-                else if(e instanceof Sink)
+                }
+                else if(e instanceof HttpException) {
+                    BayLog.error_e(e)
                     throw e;
+                }
                 else {
                     BayLog.error_e(e)
                     throw new HttpException(HttpStatus.INTERNAL_SERVER_ERROR, e.message);

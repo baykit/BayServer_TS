@@ -87,21 +87,18 @@ export class InboundShip extends Ship {
     }
 
 
-    getTour(turKey: number, force: boolean = false): Tour {
+    getTour(turKey: number, force: boolean = false, rent: boolean = true): Tour {
         if(turKey < 0 || turKey >= 0x1000000)
             throw new Error("Invalid tour key: " + turKey)
         let storeKey = InboundShip.uniqKey(this.shipId, turKey);
         var tur: Tour = this.tourStore.get(storeKey);
-        if (tur == null) {
+        if (tur == null && rent) {
             tur = this.tourStore.rent(storeKey, force);
             if(tur == null)
                 return null;
             tur.init(turKey, this);
             this.activeTours.push(tur);
         }
-        if(tur.ship != this)
-            throw new Sink();
-        tur.checkTourId(tur.id());
         return tur;
     }
 
@@ -189,14 +186,7 @@ export class InboundShip extends Ship {
             for(const nv of this.portDocker.getAdditionalHeaders()) {
                 tur.res.headers.add(nv[0], nv[1]);
             }
-            try {
-                (this.protocolHandler as Object as InboundHandler).sendResHeaders(tur);
-            }
-            catch(e) {
-                BayLog.debug("%s Error on sending headers: %s", tur, e.message);
-                tur.changeState(Tour.TOUR_ID_NOCHECK, Tour.STATE_ABORTED);
-                throw e;
-            }
+            (this.protocolHandler as Object as InboundHandler).sendResHeaders(tur);
         }
     }
 
@@ -216,28 +206,13 @@ export class InboundShip extends Ship {
     sendResContent(chkId: number, tur: Tour, buf: Buffer, ofs: number, len: number, lis: () => void) {
         this.checkShipId(chkId);
 
-        if(tur.isZombie() || tur.isAborted() || tur.isEnded()) {
-            // Don't send peer any data. Do nothing
-            BayLog.debug("%s Non-Running tour. do nothing: %s state=%s", this, tur, tur.state);
-            tur.changeState(Tour.TOUR_ID_NOCHECK, Tour.STATE_ENDED);
-            if(lis != null)
-                lis();
-            return;
-        }
-
         let maxLen = this.protocolHandler.maxResPacketDataSize();
         if(len > maxLen) {
             this.sendResContent(Ship.SHIP_ID_NOCHECK, tur, buf, ofs, maxLen, null);
             this.sendResContent(Ship.SHIP_ID_NOCHECK, tur, buf, ofs + maxLen, len - maxLen, lis);
         }
         else {
-            try {
-                (this.protocolHandler as Object as InboundHandler).sendResContent(tur, buf, ofs, len, lis);
-            }
-            catch(e) {
-                tur.changeState(Tour.TOUR_ID_NOCHECK, Tour.STATE_ABORTED);
-                throw e;
-            }
+            (this.protocolHandler as Object as InboundHandler).sendResContent(tur, buf, ofs, len, lis);
         }
     }
 
@@ -247,34 +222,23 @@ export class InboundShip extends Ship {
 
         BayLog.debug("%s sendEndTour: %s state=%s", this, tur, tur.state);
 
-        if(tur.isZombie() || tur.isAborted() || tur.isEnded()) {
-            // Don't send peer any data. Only return tour
-            BayLog.debug("%s Non-Running tour. do nothing: %s state=%s", this, tur, tur.state)
-            tur.changeState(Tour.TOUR_ID_NOCHECK, Tour.STATE_ENDED)
-            callback();
+        if(!tur.isValid()) {
+            throw new Sink("Tour is not valid");
         }
-        else {
-            if(!tur.isValid()) {
-                throw new Sink("Tour is not valid");
+        let keepAlive = false;
+        if (tur.req.headers.getConnection() == HttpHeaders.CONNECTION_KEEP_ALIVE)
+            keepAlive = true;
+        if(keepAlive) {
+            let resConn = tur.res.headers.getConnection();
+            keepAlive = (resConn == HttpHeaders.CONNECTION_KEEP_ALIVE)
+                || (resConn == HttpHeaders.CONNECTION_UNKOWN);
+            if (keepAlive) {
+                if (tur.res.headers.contentLength() < 0)
+                    keepAlive = false;
             }
-            let keepAlive = false;
-            if (tur.req.headers.getConnection() == HttpHeaders.CONNECTION_KEEP_ALIVE)
-                keepAlive = true;
-            if(keepAlive) {
-                let resConn = tur.res.headers.getConnection();
-                keepAlive = (resConn == HttpHeaders.CONNECTION_KEEP_ALIVE)
-                    || (resConn == HttpHeaders.CONNECTION_UNKOWN);
-                if (keepAlive) {
-                    if (tur.res.headers.contentLength() < 0)
-                        keepAlive = false;
-                }
-            }
-
-            //BayLog.trace("%s sendEndTour: set running false: %s id=%d", this, tur, chkTourId);
-            tur.changeState(Tour.TOUR_ID_NOCHECK, Tour.STATE_ENDED);
-
-            (this.protocolHandler as Object as InboundHandler).sendEndTour(tur, keepAlive, callback);
         }
+
+        (this.protocolHandler as Object as InboundHandler).sendEndTour(tur, keepAlive, callback);
     }
 
     sendError(chkId: number, tur: Tour, status: number, message: string, e: Error) {

@@ -106,6 +106,7 @@ export class WarpDataListener implements DataListener {
 
     notifyClose() {
         BayLog.debug(this + " notifyClose");
+        this.ship.notifyErrorToOwnerTour(HttpStatus.SERVICE_UNAVAILABLE, this + " server closed");
         this.ship.endShip();
     }
 

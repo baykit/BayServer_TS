@@ -75,6 +75,11 @@ export class AjpWarpHandler extends AjpProtocolHandler implements WarpHandler {
     }
 
     postWarpEnd(tur: Tour): void {
+        let callback = () => {
+            this.ship.agent.nonBlockingHandler.askToRead(this.ship.ch)
+        }
+        let wsip = this.ship as WarpShip
+        wsip.post(null, callback);
     }
 
     verifyProtocol(protocol: string): void {

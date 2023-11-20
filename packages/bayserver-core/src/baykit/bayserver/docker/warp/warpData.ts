@@ -39,6 +39,11 @@ export class WarpData implements ReqContentHandler {
                 postLen = maxLen;
             }
             let turId = tur.id();
+
+            if(!this.started)
+                // The buffer will become corrupted due to reuse.
+                buf = Buffer.from(buf)
+
             this.warpShip.getWarpHandler().postWarpContents(
                 tur,
                 buf,

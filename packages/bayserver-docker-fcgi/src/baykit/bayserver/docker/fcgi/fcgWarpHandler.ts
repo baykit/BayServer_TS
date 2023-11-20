@@ -91,7 +91,10 @@ export class FcgWarpHandler extends FcgProtocolHandler implements WarpHandler {
     }
 
     postWarpEnd(tur: Tour): void {
-        this.sendStdIn(tur, null, 0, 0, null);
+        let callback = () => {
+            this.ship.agent.nonBlockingHandler.askToRead(this.ship.ch)
+        }
+        this.sendStdIn(tur, null, 0, 0, callback);
     }
 
     verifyProtocol(protocol: string): void {
