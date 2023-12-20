@@ -158,12 +158,6 @@ export class Tour implements Reusable{
 
     changeState(checkId: number, newState: number) {
         BayLog.debug("%s change state: %s", this, newState);
-        try {
-            throw new IOException("hoge")
-        }
-        catch(e) {
-            BayLog.debug_e(e, "Test")
-        }
         this.checkTourId(checkId);
         this.state = newState;
     }
