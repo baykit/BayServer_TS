@@ -36,7 +36,7 @@ export class HttpUtil {
         if (!StrUtil.empty(auth)) {
             let mch = auth.match(/Basic (.*)/);
             if (!mch) {
-                BayLog.warn("Not matched with basic authentication format");
+                BayLog.debug("Not matched with basic authentication format");
             }
             else {
                 auth = mch[1];
