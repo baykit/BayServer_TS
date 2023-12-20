@@ -60,22 +60,23 @@ export class WarpDataListener implements DataListener {
         for(const [warpId, wp] of this.ship.tourMap.entries()) {
             wp.tour.checkTourId(wp.id);
 
-            if (!wp.tour.res.headerSent) {
-                BayLog.debug("%s Send ServiceUnavailable: tur=%s", this, wp.tour);
-                wp.tour.res.sendError(Tour.TOUR_ID_NOCHECK, HttpStatus.SERVICE_UNAVAILABLE, "Server closed on reading headers");
-            } else {
-                // NOT treat EOF as Error
-                BayLog.debug("%s EOF is not an error (send end content): tur=%s", this, wp.tour);
-                try {
+            try {
+                if (!wp.tour.res.headerSent) {
+                    BayLog.debug("%s Send ServiceUnavailable: tur=%s", this, wp.tour);
+                    wp.tour.res.sendError(Tour.TOUR_ID_NOCHECK, HttpStatus.SERVICE_UNAVAILABLE, "Server closed on reading headers");
+                }
+                else {
+                    // NOT treat EOF as Error
+                    BayLog.debug("%s EOF is not an error (send end content): tur=%s", this, wp.tour);
                     wp.tour.res.endContent(Tour.TOUR_ID_NOCHECK);
                 }
-                catch(e) {
-                    if(e instanceof IOException) {
-                        BayLog.debug_e(e, "%s end content error: tur=%s", this, wp.tour)
-                    }
-                    else {
-                        throw e
-                    }
+            }
+            catch(e) {
+                if(e instanceof IOException) {
+                    BayLog.debug_e(e)
+                }
+                else {
+                    throw e
                 }
             }
         }

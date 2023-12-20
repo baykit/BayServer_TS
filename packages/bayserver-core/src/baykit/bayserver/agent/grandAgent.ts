@@ -80,7 +80,8 @@ export class GrandAgent {
                 }
             }
             catch(e) {
-                this.abort(e)
+                BayLog.fatal_e(e, "%s Error on handling timer")
+                this.reqShutdown()
             }
         }, this.interval_sec * 1000);
     }
@@ -111,32 +112,43 @@ export class GrandAgent {
         BayLog.debug("%s shutdown", this);
         if(this.acceptHandler != null)
             this.acceptHandler.shutdown();
-        this.abort(null, 0)
-    }
-
-    abort(err: Error = null, status: number = 1) {
-        if(err) {
-            BayLog.fatal("%s abort", this)
-            BayLog.fatal_e(err)
-        }
-
-        if(this.aborted)
-            return
 
         this.stopTimer()
         this.commandReceiver.end()
+        this.clean()
+
         for(const lis of GrandAgent.listeners)
             lis.remove(this.agentId)
 
         GrandAgent.agents.delete(this.agentId)
 
         this.aborted = true
-        if(BayServer.harbor.isMultiCore())
+        if(BayServer.harbor.isMultiCore()) {
+            // Exit after 5 seconds
             setTimeout(() => {
-                exit(status)
+                exit(1)
             }, 5000)
-        else
-            this.clean()
+        }
+    }
+
+    abort(err: Error = null) {
+        if(err) {
+            BayLog.fatal("%s abort", this)
+            BayLog.fatal_e(err)
+        }
+
+        if(BayServer.harbor.isMultiCore()) {
+            // Exit after 5 seconds
+            setTimeout(() => {
+                exit(1)
+            }, 5000)
+        }
+    }
+
+    reqShutdown() {
+        BayLog.debug("%s req shutdown", this)
+        this.aborted = true
+        this.shutdown()
     }
 
     fork(agentId: number, monitorPort: number) {

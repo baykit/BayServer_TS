@@ -1,4 +1,3 @@
-import * as net from "net";
 import {NonBlockingHandler} from "../nonBlockingHandler";
 import {DataListener} from "./dataListener";
 import {DataConsumeListener} from "../../util/dataConsumeListener";
@@ -119,38 +118,34 @@ export abstract class Transporter implements ChannelListener, Reusable, Valve, P
         this.checkChannel(ch);
         BayLog.trace("%s onRead", this);
 
-        try {
-            if(buf == null || buf.length == 0) {
-                return this.dataListener.notifyEof();
+        if(buf == null || buf.length == 0) {
+            return this.dataListener.notifyEof();
+        }
+        else {
+            try {
+                return this.dataListener.notifyRead(buf, null);
             }
-            else {
-                try {
+            catch(e) {
+                if(e instanceof UpgradeException) {
+                    BayLog.debug("%s Protocol upgrade", this.dataListener);
                     return this.dataListener.notifyRead(buf, null);
                 }
-                catch(e) {
-                    if(e instanceof UpgradeException) {
-                        BayLog.debug("%s Protocol upgrade", this.dataListener);
-                        return this.dataListener.notifyRead(buf, null);
-                    }
-                    else {
-                        throw e
-                    }
+                else if (e instanceof ProtocolException) {
+                    let close: boolean = this.dataListener.notifyProtocolError(e);
+                    if(!close && this.serverMode)
+                        return NextSocketAction.CONTINUE;
+                    else
+                        return NextSocketAction.CLOSE;
                 }
-            }
-        } catch (e) {
-            if (e instanceof ProtocolException) {
-                let close: boolean = this.dataListener.notifyProtocolError(e);
-                if(!close && this.serverMode)
-                    return NextSocketAction.CONTINUE;
-                else
-                    return NextSocketAction.CLOSE;
-            }
-            else if (e instanceof IOException) {
-                BayLog.debug_e(e, "%s Error on notifying read or eof", this.dataListener)
-                return NextSocketAction.CLOSE
-            }
-            else {
-                throw e
+                else if (e instanceof IOException) {
+                    // IOException which occur in notifyRead must be distinguished from
+                    // IOException which occur in handshake or readNonBlock.
+                    this.onError(ch, e)
+                    return NextSocketAction.CLOSE
+                }
+                else {
+                    throw e
+                }
             }
         }
     }

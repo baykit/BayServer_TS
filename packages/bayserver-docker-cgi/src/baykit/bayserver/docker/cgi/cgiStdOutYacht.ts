@@ -144,8 +144,7 @@ export class CgiStdOutYacht extends Yacht {
 
     notifyClose() {
         BayLog.debug("%s CGI StdOut: notifyClose", this.tour);
-        this.tour.checkTourId(this.tourId);
-        (this.tour.req.contentHandler as CgiReqContentHandler).stdOutClosed();
+        this.handler.stdOutClosed();
     }
 
     checkTimeout(durationSec: number): boolean {

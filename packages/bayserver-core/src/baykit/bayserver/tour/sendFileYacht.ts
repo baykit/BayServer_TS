@@ -4,6 +4,8 @@ import {BayLog} from "../bayLog";
 import {NextSocketAction} from "../agent/nextSocketAction";
 import {Sink} from "../sink";
 import {Valve} from "../util/valve";
+import {IOException} from "../util/ioException";
+
 
 export class SendFileYacht extends Yacht {
 
@@ -69,7 +71,17 @@ export class SendFileYacht extends Yacht {
     notifyEof(): number {
         BayLog.debug("%s EOF(^o^) %s", this, this.file);
         this.checkInitialized()
-        this.tour.res.endContent(this.tourId);
+        try {
+            this.tour.res.endContent(this.tourId);
+        }
+        catch(e) {
+            if(e instanceof IOException) {
+                BayLog.debug_e(e)
+            }
+            else {
+                throw e
+            }
+        }
         return NextSocketAction.CLOSE;
     }
 

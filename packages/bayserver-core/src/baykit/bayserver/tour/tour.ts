@@ -11,6 +11,8 @@ import {Sink} from "../sink";
 import {BayLog} from "../bayLog";
 import {BayServer} from "../bayserver";
 import {HttpStatus} from "../util/httpStatus";
+import * as querystring from "querystring";
+import {IOException} from "../util/ioException";
 
 export class Tour implements Reusable{
 
@@ -80,12 +82,12 @@ export class Tour implements Reusable{
         this.club = null;
         this.errorHandling = false;
 
+        this.changeState(Tour.TOUR_ID_NOCHECK, Tour.STATE_UNINITIALIZED);
         this.tourId = Tour.INVALID_TOUR_ID;
 
         this.interval = 0;
         this.isSecure = false;
         //BayLog.trace("%s reset running false", this);
-        this.changeState(Tour.TOUR_ID_NOCHECK, Tour.STATE_UNINITIALIZED);
         this.error = null;
 
         this.ship = null;
@@ -115,17 +117,12 @@ export class Tour implements Reusable{
                 city.enter(this);
             }
             catch(e) {
-                this.changeState(Tour.TOUR_ID_NOCHECK, Tour.STATE_ABORTED)
-                if(e instanceof Sink) {
-                    throw e;
-                }
-                else if(e instanceof HttpException) {
-                    BayLog.error_e(e)
+                if(e instanceof HttpException) {
+                    this.changeState(this.tourId, Tour.STATE_ABORTED)
                     throw e;
                 }
                 else {
-                    BayLog.error_e(e)
-                    throw new HttpException(HttpStatus.INTERNAL_SERVER_ERROR, e.message);
+                    throw e;
                 }
             }
         }
@@ -160,7 +157,13 @@ export class Tour implements Reusable{
     }
 
     changeState(checkId: number, newState: number) {
-        BayLog.trace("%s change state: %s", this, newState);
+        BayLog.debug("%s change state: %s", this, newState);
+        try {
+            throw new IOException("hoge")
+        }
+        catch(e) {
+            BayLog.debug_e(e, "Test")
+        }
         this.checkTourId(checkId);
         this.state = newState;
     }

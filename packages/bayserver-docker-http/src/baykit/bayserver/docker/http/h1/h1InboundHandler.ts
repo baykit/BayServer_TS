@@ -195,7 +195,6 @@ export class H1InboundHandler extends H1ProtocolHandler implements InboundHandle
             BayLog.error(BayMessage.get(Symbol.INT_NO_MORE_TOURS));
             tur = sip.getTour(this.curReqId, true);
             tur.res.sendError(Tour.TOUR_ID_NOCHECK, HttpStatus.SERVICE_UNAVAILABLE, "No available tours");
-            //sip.agent.shutdown(false);
             return NextSocketAction.CONTINUE;
         }
         

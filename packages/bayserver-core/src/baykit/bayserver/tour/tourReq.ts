@@ -220,7 +220,7 @@ export class TourReq implements Reusable {
     abort(): boolean {
         BayLog.debug("%s abort tour", this.tour);
         if(this.tour.isPreparing()) {
-            this.tour.changeState(Tour.TOUR_ID_NOCHECK, Tour.STATE_ABORTED);
+            this.tour.changeState(this.tour.tourId, Tour.STATE_ABORTED);
             return true
         }
         else if(this.tour.isRunning()) {
@@ -228,11 +228,11 @@ export class TourReq implements Reusable {
             if (this.contentHandler != null)
                 aborted = this.contentHandler.onAbort(this.tour);
             if(aborted)
-                this.tour.changeState(Tour.TOUR_ID_NOCHECK, Tour.STATE_ABORTED);
+                this.tour.changeState(this.tour.tourId, Tour.STATE_ABORTED);
             return aborted;
         }
         else {
-            BayLog.debug("%s tour is already aborted", this.tour);
+            BayLog.debug("%s tour is not preparing or not running", this.tour);
             return false;
         }
     }

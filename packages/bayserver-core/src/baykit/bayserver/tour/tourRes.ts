@@ -172,7 +172,7 @@ export class TourRes implements Reusable{
                 }
                 catch(e) {
                     lis()
-                    this.tour.changeState(Tour.TOUR_ID_NOCHECK, Tour.STATE_ABORTED);
+                    this.tour.changeState(this.tour.tourId, Tour.STATE_ABORTED);
                     throw e;
                 }
             }
@@ -237,7 +237,7 @@ export class TourRes implements Reusable{
             // it will become uninitialized.
             BayLog.debug("%s Tour is returned (id=%d): %s (state=%d)", this, chkId, tourReturned, this.tour.state)
             if (!tourReturned) {
-                this.tour.changeState(Tour.TOUR_ID_NOCHECK, Tour.STATE_ENDED);
+                this.tour.changeState(chkId, Tour.STATE_ENDED);
             }
         }
     }
@@ -283,7 +283,7 @@ export class TourRes implements Reusable{
                 catch(e) {
                     if(e instanceof IOException) {
                         BayLog.debug_e(e, "%s IOException while sending error", this)
-                        this.tour.changeState(Tour.TOUR_ID_NOCHECK, Tour.STATE_ABORTED);
+                        this.tour.changeState(chkId, Tour.STATE_ABORTED);
                     }
                     else {
                         throw e
@@ -356,8 +356,19 @@ export class TourRes implements Reusable{
         }
         else {
             this.setConsumeListener(ContentConsumeListenerUtil.devNull);
-            this.tour.ship.sendRedirect(this.tour.shipId, this.tour, status, location);
-            this.headerSent = true;
+            try {
+                this.tour.ship.sendRedirect(this.tour.shipId, this.tour, status, location);
+            }
+            catch(e) {
+                if(e instanceof IOException) {
+                    this.tour.changeState(chkId, Tour.STATE_ABORTED)
+                }
+                throw e
+            }
+            finally {
+                this.headerSent = true;
+                this.endContent(chkId)
+            }
         }
 
         this.endContent(chkId);

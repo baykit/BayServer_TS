@@ -21,7 +21,7 @@ export class CommandReceiver {
         })
         this.communicationChannel.on('close', () => {
             BayLog.debug("%s communication channel closed", this)
-            this.agent.abort(null, 0)
+            this.agent.abort()
         })
     }
 
@@ -49,7 +49,7 @@ export class CommandReceiver {
                         this.agent.printUsage();
                         break
                     case GrandAgent.CMD_SHUTDOWN:
-                        this.agent.shutdown();
+                        this.agent.reqShutdown();
                         return
                     case GrandAgent.CMD_ABORT:
                         this.agent.abort()   // -> exit if process mode
