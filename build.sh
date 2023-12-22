@@ -32,6 +32,7 @@ set_ver() {
 
 version=`cat VERSION`
 echo "version=" $version
+sed 's/=.*/="$version"/'  packages/bayserver-core/src/baykit/bayserver/version.ts 
 
 package_list="
   bayserver-core
