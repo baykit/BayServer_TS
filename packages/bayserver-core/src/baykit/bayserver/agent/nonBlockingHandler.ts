@@ -489,15 +489,24 @@ export class NonBlockingHandler implements TimerHandler {
         BayLog.debug("%s Close channel: %s", this.agent, chState)
         if(chState.ch.type == ChannelWrapper.TYPE_SOCKET){
             chState.ch.socket.pause()
-            // 'close' event will occur
-            chState.ch.socket.end(() : void => {
+
+            // catches close event
+            chState.ch.socket.on('close', (err) => {
+                if (err) {
+                    BayLog.debug("%s Socket closed by error", this.agent)
+                } else {
+                    BayLog.debug("%s Socket closed", this.agent)
+                }
                 try {
                     this.onClosed(chState)
                 } catch (e) {
                     this.agent.abort(e)
                 }
                 this.removeChannelState(chState.ch)
-            })
+            });
+
+            // 'close' event will occur
+            chState.ch.socket.destroy()
         }
         else if( chState.ch.type == ChannelWrapper.TYPE_READABLE) {
             chState.ch.readable.destroy() // 'close' event will occur

@@ -191,9 +191,6 @@ export abstract class Transporter implements ChannelListener, Reusable, Valve, P
             return;
         }
 
-        if(!this.chValid)
-            return
-
         this.setValid(false);
 
         this.dataListener.notifyClose()
