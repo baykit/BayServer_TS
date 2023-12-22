@@ -99,12 +99,15 @@ export class InboundShip extends Ship {
             tur.init(turKey, this);
             this.activeTours.push(tur);
         }
+        else {
+            tur.ship.checkShipId(this.shipId)
+        }
         return tur;
     }
 
 
-    private static uniqKey(sipId: number, turKey: number): number {
-        return sipId << 24 | (turKey & 0xffffffff);
+    private static uniqKey(sipId: number, turKey: number): BigInt {
+        return BigInt(sipId) << BigInt(32) | (BigInt(turKey) & BigInt(0xffffffff));
     }
 
     returnTour(tur: Tour) {

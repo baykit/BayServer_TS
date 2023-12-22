@@ -22,7 +22,7 @@ export class TourStore {
     static MAX_TOURS: number = 128;
 
     private freeTours: Tour[] = [];
-    private activeTourMap: Map<number, Tour>
+    private activeTourMap: Map<BigInt, Tour>
     static maxCount: number;
 
     /** Agent ID => TourStore */
@@ -32,12 +32,12 @@ export class TourStore {
         this.activeTourMap = new Map()
     }
 
-    get(key: number): Tour {
+    get(key: BigInt): Tour {
         return this.activeTourMap.get(key)
     }
 
 
-    rent(key: number, force: boolean): Tour {
+    rent(key: BigInt, force: boolean): Tour {
         let tur = this.get(key);
         if(tur != null)
             throw new Sink("Tour is active: " + tur);
@@ -58,7 +58,7 @@ export class TourStore {
         return tur;
     }
 
-    Return(key: number) : void {
+    Return(key: BigInt) : void {
         if(!this.activeTourMap.has(key)){
             throw new Sink("Tour is not active key=: " + key);
         }
