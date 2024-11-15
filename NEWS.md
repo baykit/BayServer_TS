@@ -1,5 +1,9 @@
 # BayServer for TypeScript
 
+# 2.3.4
+
+- [core] Fixes some small bugs
+
 # 2.3.3
 
 - [core] Fixes the issue encountered when aborting GrandAgent.

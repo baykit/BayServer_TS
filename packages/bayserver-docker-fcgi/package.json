@@ -1,5 +1,5 @@
 {
-  "version": "2.3.3",
+  "version": "2.3.4",
   "name": "bayserver-docker-fcgi",
   "description": "BayServer is one of the high-speed web servers. It operates as a single-threaded, asynchronous server, which makes it exceptionally fast. It also supports multi-core processors, harnessing the full potential of the CPU's capabilities.\n",
   "scripts": {
@@ -13,7 +13,7 @@
     "@types/node": "^18.11.10",
     "@types/source-map-support": "^0.5.6",
     "source-map-support": "^0.5.21",
-    "bayserver-core": "2.3.3",
+    "bayserver-core": "2.3.4",
     "ts-node": "^10.9.1",
     "typescript": "^4.9.3"
   }
