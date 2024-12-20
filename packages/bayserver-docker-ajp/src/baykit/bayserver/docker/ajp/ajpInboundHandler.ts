@@ -6,7 +6,6 @@ import {ProtocolHandler} from "bayserver-core/baykit/bayserver/protocol/protocol
 import {AjpCommand} from "./ajpCommand";
 import {AjpPacket} from "./ajpPacket";
 import {CmdForwardRequest} from "./command/cmdForwardRequest";
-import {Tour} from "bayserver-core/baykit/bayserver/tour/tour";
 import {CmdSendHeaders} from "./command/cmdSendHeaders";
 import {DataConsumeListener} from "bayserver-core/baykit/bayserver/util/dataConsumeListener";
 import {CmdSendBodyChunk} from "./command/cmdSendBodyChunk";
@@ -15,7 +14,7 @@ import {BayLog} from "bayserver-core/baykit/bayserver/bayLog";
 import {CmdEndResponse} from "./command/cmdEndResponse";
 import {IOException} from "bayserver-core/baykit/bayserver/util/ioException";
 import {ProtocolException} from "bayserver-core/baykit/bayserver/protocol/protocolException";
-import {InboundShip} from "bayserver-core/baykit/bayserver/docker/base/inboundShip";
+import {InboundShip} from "bayserver-core/baykit/bayserver/common/inboundShip";
 import {HttpStatus} from "bayserver-core/baykit/bayserver/util/httpStatus";
 import {BayMessage} from "bayserver-core/baykit/bayserver/bayMessage";
 import {NextSocketAction} from "bayserver-core/baykit/bayserver/agent/nextSocketAction";
@@ -26,17 +25,40 @@ import {ReqContentHandlerUtil} from "bayserver-core/baykit/bayserver/tour/reqCon
 import {CmdData} from "./command/cmdData";
 import {CmdGetBodyChunk} from "./command/cmdGetBodyChunk";
 import {CmdShutdown} from "./command/cmdShutdown";
-import {GrandAgentMonitor} from "bayserver-core/baykit/bayserver/agent/grandAgentMonitor";
 import {HttpUtil} from "bayserver-core/baykit/bayserver/util/httpUtil";
+import {GrandAgentMonitor} from "bayserver-core/baykit/bayserver/agent/monitor/grandAgentMonitor";
+import {AjpHandler} from "./ajpHandler";
+import {AjpCommandUnPacker} from "./ajpCommandUnPacker";
+import {AjpPacketUnpacker} from "./ajpPacketUnpacker";
+import {PacketPacker} from "bayserver-core/baykit/bayserver/protocol/packetPacker";
+import {CommandPacker} from "bayserver-core/baykit/bayserver/protocol/commandPacker";
+import {AjpCommandHandler} from "./ajpCommandHandler";
+import {SocketRudder} from "bayserver-core/baykit/bayserver/rudder/socketRudder";
+import {Socket} from "net";
+import {Tour} from "bayserver-core/baykit/bayserver/tour/tour";
 
 export class AjpInboundHandler_ProtocolHandlerFactory implements ProtocolHandlerFactory<AjpCommand, AjpPacket> {
 
     createProtocolHandler(pktStore: PacketStore<AjpPacket>): ProtocolHandler<AjpCommand, AjpPacket> {
-        return new AjpInboundHandler(pktStore);
+        let inboundHandler = new AjpInboundHandler()
+        let commandUnpacker = new AjpCommandUnPacker(inboundHandler);
+        let packetUnpacker = new AjpPacketUnpacker(pktStore, commandUnpacker);
+        let packetPacker = new PacketPacker<AjpPacket>();
+        let commandPacker = new CommandPacker<AjpCommand, AjpPacket, AjpCommandHandler>(packetPacker, pktStore);
+        let protocolHandler =
+            new AjpProtocolHandler(
+                inboundHandler,
+                packetUnpacker,
+                packetPacker,
+                commandUnpacker,
+                commandPacker,
+                true);
+        inboundHandler.init(protocolHandler)
+        return protocolHandler
     }
 }
 
-export class AjpInboundHandler extends AjpProtocolHandler implements InboundHandler {
+export class AjpInboundHandler implements InboundHandler, AjpHandler {
 
     static readonly STATE_READ_FORWARD_REQUEST: number = 1
     static readonly STATE_READ_DATA: number = 2
@@ -45,13 +67,17 @@ export class AjpInboundHandler extends AjpProtocolHandler implements InboundHand
 
     curTourId: number
     reqCommand: CmdForwardRequest
+    protocolHandler: AjpProtocolHandler
 
     state: number
     keeping: boolean
 
-    constructor(pktStore: PacketStore<AjpPacket>) {
-        super(pktStore, true);
+    constructor() {
         this.resetState()
+    }
+
+    init(protoHandler: AjpProtocolHandler): void {
+        this.protocolHandler = protoHandler
     }
 
     //////////////////////////////////////////////////////////////////
@@ -59,7 +85,6 @@ export class AjpInboundHandler extends AjpProtocolHandler implements InboundHand
     //////////////////////////////////////////////////////////////////
 
     reset() : void {
-        super.reset();
         this.resetState();
         this.reqCommand = null;
         this.keeping = false;
@@ -79,42 +104,42 @@ export class AjpInboundHandler extends AjpProtocolHandler implements InboundHand
             }
         }
         cmd.setStatus(tur.res.headers.status);
-        this.commandPacker.post(this.ship, cmd);
+        this.protocolHandler.post(cmd);
     }
 
     sendResContent(tur: Tour, bytes: Buffer, ofs: number, len: number, lis: DataConsumeListener): void {
         let cmd = new CmdSendBodyChunk(bytes, ofs, len);
-        this.commandPacker.post(this.ship, cmd, lis);
+        this.protocolHandler.post(cmd, lis);
     }
 
     sendEndTour(tur: Tour, keepAlive: boolean, lis: DataConsumeListener): void {
-        BayLog.debug(this.ship + " endTour: tur=" + tur + " keep=" + keepAlive);
+        BayLog.debug(this.ship() + " endTour: tur=" + tur + " keep=" + keepAlive);
         let cmd = new CmdEndResponse();
         cmd.reuse = keepAlive;
 
         let ensureFunc = () => {
             if (!keepAlive)
-                this.commandPacker.end(this.ship);
+                this.ship().postClose();
         };
 
         try {
-            this.commandPacker.post(this.ship, cmd, () => {
-                BayLog.debug(this.ship + " call back in sendEndTour: tur=" + tur + " keep=" + keepAlive);
+            this.protocolHandler.post(cmd, () => {
+                BayLog.debug(this.ship() + " call back in sendEndTour: tur=" + tur + " keep=" + keepAlive);
                 ensureFunc();
                 lis();
             });
         }
         catch(e) {
             if(e instanceof IOException) {
-                BayLog.debug(this.ship + " post failed in sendEndTour: tur=" + tur + " keep=" + keepAlive);
+                BayLog.debug(this.ship() + " post failed in sendEndTour: tur=" + tur + " keep=" + keepAlive);
                 ensureFunc();
             }
             throw e;
         }
     }
 
-    sendReqProtocolError(e: ProtocolException): boolean {
-        let ibShip = this.ship as InboundShip
+    onProtocolError(e: ProtocolException): boolean {
+        let ibShip = this.ship()
         let tur = ibShip.getErrorTour();
         tur.res.sendError(Tour.TOUR_ID_NOCHECK, HttpStatus.BAD_REQUEST, e.message, e);
         return true;
@@ -125,7 +150,7 @@ export class AjpInboundHandler extends AjpProtocolHandler implements InboundHand
     //////////////////////////////////////////////////////////////////
 
     handleForwardRequest(cmd: CmdForwardRequest): number {
-        let sip = this.ship as InboundShip;
+        let sip = this.ship()
         BayLog.debug("%s handleForwardRequest method=%s uri=%s", sip, cmd.method, cmd.reqUri);
 
         if(this.state != AjpInboundHandler.STATE_READ_FORWARD_REQUEST)
@@ -133,12 +158,12 @@ export class AjpInboundHandler extends AjpProtocolHandler implements InboundHand
 
         this.keeping = false;
         this.reqCommand = cmd;
-        let tur = sip.getTour(AjpInboundHandler.DUMMY_KEY);
+        let tur: Tour = sip.getTour(AjpInboundHandler.DUMMY_KEY);
         if(tur == null) {
             BayLog.error(BayMessage.get(Symbol.INT_NO_MORE_TOURS));
             tur = sip.getTour(AjpInboundHandler.DUMMY_KEY, true);
             tur.res.sendError(Tour.TOUR_ID_NOCHECK, HttpStatus.SERVICE_UNAVAILABLE, "No available tours");
-            tur.res.endContent(Tour.TOUR_ID_NOCHECK);
+            tur.res.endResContent(Tour.TOUR_ID_NOCHECK);
             return NextSocketAction.CONTINUE;
         }
 
@@ -165,11 +190,7 @@ export class AjpInboundHandler extends AjpProtocolHandler implements InboundHand
         let reqContLen = cmd.headers.contentLength();
 
         if(reqContLen > 0) {
-            let sid = sip.shipId;
-            tur.req.setConsumeListener(reqContLen, (len, resume) => {
-                if (resume)
-                    sip.resume(sid);
-            });
+            tur.req.setLimit(reqContLen)
         }
 
         try {
@@ -195,7 +216,7 @@ export class AjpInboundHandler extends AjpProtocolHandler implements InboundHand
                     // Delay send
                     this.changeState(AjpInboundHandler.STATE_READ_DATA);
                     tur.error = e;
-                    tur.req.setContentHandler(ReqContentHandlerUtil.devNull);
+                    tur.req.setReqContentHandler(ReqContentHandlerUtil.devNull);
                     return NextSocketAction.CONTINUE;
                 }
             }
@@ -205,54 +226,75 @@ export class AjpInboundHandler extends AjpProtocolHandler implements InboundHand
     }
 
     handleData(cmd: CmdData): number {
-        let sip = this.ship as InboundShip;
+        let sip = this.ship()
         BayLog.debug("%s handleData len=%s", sip, cmd.length);
 
         if(this.state != AjpInboundHandler.STATE_READ_DATA)
             throw new ProtocolException("Invalid AJP command: " + cmd.type + " state=" + this.state);
 
         let tur = sip.getTour(AjpInboundHandler.DUMMY_KEY);
-        let success = tur.req.postContent(Tour.TOUR_ID_NOCHECK, cmd.data, cmd.start, cmd.length);
+        try {
+            let sid = sip.shipId
+            let success =
+                tur.req.postReqContent(
+                    Tour.TOUR_ID_NOCHECK,
+                    cmd.data,
+                    cmd.start,
+                    cmd.length,
+                    (len, resume) => {
+                        if(resume)
+                            sip.resumeRead(sid)
+                    });
 
-        if(tur.req.bytesPosted == tur.req.bytesLimit) {
-            // request content completed
+            if(tur.req.bytesPosted == tur.req.bytesLimit) {
+                // request content completed
 
-            if(tur.error != null){
-                // Error has occurred on header completed
+                if(tur.error != null){
+                    // Error has occurred on header completed
 
-                tur.res.sendHttpException(Tour.TOUR_ID_NOCHECK, tur.error);
-                this.resetState();
-                return NextSocketAction.WRITE;
-            }
-            else {
-                try {
-                    this.endReqContent(tur);
-                    return NextSocketAction.CONTINUE;
-                } catch (e) {
-                    if(e instanceof HttpException) {
-                        tur.res.sendHttpException(Tour.TOUR_ID_NOCHECK, e);
-                        this.resetState();
-                        return NextSocketAction.WRITE;
+                    tur.res.sendHttpException(Tour.TOUR_ID_NOCHECK, tur.error);
+                    this.resetState();
+                    return NextSocketAction.WRITE;
+                }
+                else {
+                    try {
+                        this.endReqContent(tur);
+                        return NextSocketAction.CONTINUE;
+                    } catch (e) {
+                        if(e instanceof HttpException) {
+                            tur.res.sendHttpException(Tour.TOUR_ID_NOCHECK, e);
+                            this.resetState();
+                            return NextSocketAction.WRITE;
+                        }
+                        else
+                            throw e;
                     }
-                    else
-                        throw e;
                 }
             }
-        }
-        else {
-            let bch = new CmdGetBodyChunk();
-            bch.reqLen = tur.req.bytesLimit - tur.req.bytesPosted;
-            if(bch.reqLen > AjpPacket.MAX_DATA_LEN) {
-                bch.reqLen = AjpPacket.MAX_DATA_LEN;
+            else {
+                let bch = new CmdGetBodyChunk();
+                bch.reqLen = tur.req.bytesLimit - tur.req.bytesPosted;
+                if(bch.reqLen > AjpPacket.MAX_DATA_LEN) {
+                    bch.reqLen = AjpPacket.MAX_DATA_LEN;
+                }
+                this.protocolHandler.post(bch);
+
+                if(!success)
+                    return NextSocketAction.SUSPEND;
+                else
+                    return NextSocketAction.CONTINUE;
             }
-            this.commandPacker.post(sip, bch);
-
-            if(!success)
-                return NextSocketAction.SUSPEND;
-            else
-                return NextSocketAction.CONTINUE;
         }
-
+        catch(e) {
+            if(e instanceof HttpException) {
+                tur.req.abort();
+                tur.res.sendHttpException(Tour.TOUR_ID_NOCHECK, e);
+                this.resetState();
+                return NextSocketAction.WRITE
+            }
+            else
+                throw e
+        }
     }
 
     handleEndResponse(cmd: CmdEndResponse): number {
@@ -268,7 +310,7 @@ export class AjpInboundHandler extends AjpProtocolHandler implements InboundHand
     }
 
     handleShutdown(cmd: CmdShutdown): number {
-        BayLog.debug(this.ship + " handleShutdown");
+        BayLog.debug(this.ship() + " handleShutdown");
         GrandAgentMonitor.shutdownAll();
         return NextSocketAction.CLOSE;
     }
@@ -302,7 +344,7 @@ export class AjpInboundHandler extends AjpProtocolHandler implements InboundHand
         HttpUtil.parseHostPort(tur, this.reqCommand.isSsl ? 443 : 80);
         HttpUtil.parseAuthrization(tur);
 
-        let socket = this.ship.ch.socket
+        let socket = (this.ship().rudder as SocketRudder).readable as Socket
         tur.req.remotePort = -1;
         tur.req.remoteAddress = this.reqCommand.remoteAddr;
         tur.req.remoteHostFunc = () =>  this.reqCommand.remoteHost;
@@ -315,5 +357,8 @@ export class AjpInboundHandler extends AjpProtocolHandler implements InboundHand
         tur.go();
     }
 
+    ship(): InboundShip {
+        return this.protocolHandler.ship as InboundShip
+    }
 }
 

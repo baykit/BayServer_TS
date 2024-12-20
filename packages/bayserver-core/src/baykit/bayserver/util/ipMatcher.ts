@@ -36,18 +36,21 @@ export class IpMatcher {
 
     parseIp(ipDesc: string) {
         let ipList = ipDesc.split("/")
-        let ip: string, mask: string;
+        let ip: string, prefixLen: number;
         if (ipList.length == 0)
             throw new BayException(BayMessage.get(Symbol.CFG_INVALID_IP_DESC, ipDesc));
 
         ip = ipList[0]
         if(ipList.length == 1)
-            mask = "255.255.255.255";
-        else
-            mask = ipList[1];
+            prefixLen = 32;
+        else {
+            prefixLen = Number(ipList[1]);
+            if(isNaN(prefixLen))
+                throw new BayException(BayMessage.get(Symbol.CFG_INVALID_IP_DESC, ipDesc));
+        }
 
         let ipAdr = IpMatcher.getIpAddress(ip);
-        this.maskAdr = IpMatcher.getIpAddress(mask);
+        this.maskAdr = IpMatcher.getMaskAdr(prefixLen, ipAdr.length);
         if (ipAdr.length != this.maskAdr.length) {
             throw new BayException(
                 BayMessage.get(Symbol.CFG_IPV4_AND_IPV6_ARE_MIXED, ipDesc));
@@ -70,7 +73,6 @@ export class IpMatcher {
                 ipv6 = true
             }
         }
-        let sadr = new net.SocketAddress({address: adr, family: ipv6 ? "ipv6" : "ipv4"})
 
         if(ipv6) {
 
@@ -90,7 +92,7 @@ export class IpMatcher {
         }
         else {
             return adr.split(".").map((item) => {
-                return Number.parseInt(item)})
+                return Number(item)})
         }
     }
 
@@ -107,4 +109,15 @@ export class IpMatcher {
         return address
     }
 
+    static getMaskAdr(prefixLen: number, ipLen: number): number[] {
+        const mask = Array(ipLen).fill(0); // mask := [0, 0, ..., 0]
+
+        for (let i = 0; i < ipLen; i++) {
+            const bits = Math.min(8, prefixLen); // number of bits
+            mask[i] = (255 << (8 - bits)) & 255; // calc mask value
+            prefixLen -= bits;
+        }
+
+        return mask;
+    }
 }

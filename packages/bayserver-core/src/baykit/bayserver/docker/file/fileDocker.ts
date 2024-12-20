@@ -54,7 +54,7 @@ export class FileDocker extends ClubBase {
         }
         else {
             let handler = new FileContentHandler(real);
-            tur.req.setContentHandler(handler);
+            tur.req.setReqContentHandler(handler);
         }
     }
 }

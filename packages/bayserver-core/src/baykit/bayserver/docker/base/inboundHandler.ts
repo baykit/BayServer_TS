@@ -7,7 +7,7 @@ export interface InboundHandler {
     /**
      * Send protocol error
      */
-    sendReqProtocolError(e: ProtocolException): boolean;
+    onProtocolError(e: ProtocolException): boolean;
 
     /**
      * Send HTTP headers to client

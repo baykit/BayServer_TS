@@ -6,6 +6,7 @@ import {HttpStatus} from "bayserver-core/baykit/bayserver/util/httpStatus";
 import {ChildProcess} from "child_process";
 import * as child_process from "child_process";
 import {IOException} from "bayserver-core/baykit/bayserver/util/ioException";
+import {ContentConsumeListener} from "bayserver-core/baykit/bayserver/tour/contentConsumeListener";
 
 export class CgiReqContentHandler implements ReqContentHandler{
 
@@ -37,7 +38,7 @@ export class CgiReqContentHandler implements ReqContentHandler{
     // Implements ReqContentHandler
     //////////////////////////////////////////////////////
 
-    onReadContent(tur: Tour, buf: Buffer, start: number, len: number): void {
+    onReadReqContent(tur: Tour, buf: Buffer, start: number, len: number, lis: ContentConsumeListener): void {
         BayLog.debug("%s CGI:onReadReqContent: len=%d", tur, len);
         this.childProcess.stdin.write(buf.subarray(start, start + len), (err) => {
             if(err) {
@@ -45,17 +46,17 @@ export class CgiReqContentHandler implements ReqContentHandler{
                 tur.req.abort()
             }
             else
-                tur.req.consumed(Tour.TOUR_ID_NOCHECK, len);
+                tur.req.consumed(Tour.TOUR_ID_NOCHECK, len, lis);
         });
         this.access()
     }
 
-    onEndContent(tur: Tour): void {
+    onEndReqContent(tur: Tour): void {
         BayLog.debug("%s CGI:endReqContent", tur);
         this.access()
     }
 
-    onAbort(tur: Tour): boolean {
+    onAbortReq(tur: Tour): boolean {
         BayLog.debug("%s CGI:abortReq", tur);
         try {
             this.childProcess.stdin.end();
@@ -156,7 +157,7 @@ export class CgiReqContentHandler implements ReqContentHandler{
                 this.tour.res.sendError(this.tourId, HttpStatus.INTERNAL_SERVER_ERROR, "Invalid exit status");
             }
             else {
-                this.tour.res.endContent(this.tourId);
+                this.tour.res.endResContent(this.tourId);
             }
         }
         catch(e) {

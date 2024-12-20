@@ -1,5 +1,4 @@
 import {H1ProtocolHandler} from "./h1ProtocolHandler";
-import {WarpHandler} from "bayserver-core/baykit/bayserver/docker/warp/warpHandler";
 import {ProtocolHandlerFactory} from "bayserver-core/baykit/bayserver/protocol/protocolHandlerFactory";
 import {H1Command} from "./h1Command";
 import {H1Packet} from "./h1Packet";
@@ -7,27 +6,50 @@ import {PacketStore} from "bayserver-core/baykit/bayserver/protocol/packetStore"
 import {ProtocolHandler} from "bayserver-core/baykit/bayserver/protocol/protocolHandler";
 import {CmdContent} from "./command/cmdContent";
 import {CmdHeader} from "./command/cmdHeader";
-import {WarpData} from "bayserver-core/baykit/bayserver/docker/warp/warpData";
 import {BayLog} from "bayserver-core/baykit/bayserver/bayLog";
 import {ProtocolException} from "bayserver-core/baykit/bayserver/protocol/protocolException";
 import {BayServer} from "bayserver-core/baykit/bayserver/bayserver";
 import {Tour} from "bayserver-core/baykit/bayserver/tour/tour";
 import {HttpStatus} from "bayserver-core/baykit/bayserver/util/httpStatus";
 import {NextSocketAction} from "bayserver-core/baykit/bayserver/agent/nextSocketAction";
-import {WarpShip} from "bayserver-core/baykit/bayserver/docker/warp/warpShip";
 import {CmdEndContent} from "./command/cmdEndContent";
 import {Sink} from "bayserver-core/baykit/bayserver/sink";
 import {HttpHeaders} from "bayserver-core/baykit/bayserver/util/httpHeaders";
 import {DataConsumeListener} from "bayserver-core/baykit/bayserver/util/dataConsumeListener";
+import {WarpHandler} from "bayserver-core/baykit/bayserver/common/warpHandler";
+import {H1Handler} from "./h1Handler";
+import {H1CommandUnPacker} from "./h1CommandUnPacker";
+import {PacketUnpacker} from "bayserver-core/baykit/bayserver/protocol/packetUnpacker";
+import {H1PacketUnpacker} from "./h1PacketUnPacker";
+import {PacketPacker} from "bayserver-core/baykit/bayserver/protocol/packetPacker";
+import {CommandPacker} from "bayserver-core/baykit/bayserver/protocol/commandPacker";
+import {WarpData} from "bayserver-core/baykit/bayserver/common/warpData";
+import {WarpShip} from "bayserver-core/baykit/bayserver/common/warpShip";
+import {Buffer} from "buffer";
 
 export class H1WarpHandler_ProtocolHandlerFactory implements ProtocolHandlerFactory<H1Command , H1Packet> {
     createProtocolHandler(pktStore: PacketStore<H1Packet>): ProtocolHandler<H1Command, H1Packet> {
-        return new H1WarpHandler(pktStore)
+        let warpHandler = new H1WarpHandler()
+        let commandUnpacker = new H1CommandUnPacker(warpHandler, false)
+        let packetUnpacker: PacketUnpacker<H1Packet> = new H1PacketUnpacker(commandUnpacker, pktStore)
+        let packetPacker: PacketPacker<H1Packet> = new PacketPacker<H1Packet>()
+        let commandPacker: CommandPacker<H1Command, H1Packet, any> = new CommandPacker(packetPacker, pktStore)
+        let protocolHandler =
+            new H1ProtocolHandler(
+                warpHandler,
+                packetUnpacker,
+                packetPacker,
+                commandUnpacker,
+                commandPacker,
+                false
+            )
+        warpHandler.init(protocolHandler)
+        return protocolHandler;
     }
 
 }
 
-export class H1WarpHandler extends H1ProtocolHandler implements WarpHandler {
+export class H1WarpHandler implements WarpHandler, H1Handler {
 
     static readonly STATE_READ_HEADER: number = 1
     static readonly STATE_READ_CONTENT: number = 2
@@ -35,20 +57,22 @@ export class H1WarpHandler extends H1ProtocolHandler implements WarpHandler {
 
     static readonly FIXED_WARP_ID: number = 1
 
+    protocolHandler: H1ProtocolHandler
     state: number
 
-    constructor(pktStore: PacketStore<H1Packet>) {
-        super(pktStore, false);
+    constructor() {
         this.resetState()
+    }
+
+    init(ph: H1ProtocolHandler): void {
+        this.protocolHandler = ph
     }
 
     //////////////////////////////////////////////////////
     // Implements Reusable
     //////////////////////////////////////////////////////
 
-
-    reset() {
-        super.reset();
+    reset(): void {
         this.resetState();
     }
 
@@ -66,7 +90,7 @@ export class H1WarpHandler extends H1ProtocolHandler implements WarpHandler {
             this.changeState(H1WarpHandler.STATE_READ_HEADER);
 
         if (this.state != H1WarpHandler.STATE_READ_HEADER)
-            throw new ProtocolException("Header command not expected");
+            throw new ProtocolException("Header command not expected: state=%d", this.state);
 
         if(BayServer.harbor.isTraceHeader()) {
             BayLog.info("%s warp_http: resStatus: %d", wdat, cmd.status);
@@ -90,7 +114,7 @@ export class H1WarpHandler extends H1ProtocolHandler implements WarpHandler {
             let sid = wsip.id();
             tur.res.setConsumeListener((len, resume) => {
                 if(resume) {
-                    wsip.resume(sid);
+                    wsip.resumeRead(sid);
                 }
             });
         }
@@ -108,7 +132,7 @@ export class H1WarpHandler extends H1ProtocolHandler implements WarpHandler {
             throw new ProtocolException("Content command not expected");
 
 
-        let available = tur.res.sendContent(Tour.TOUR_ID_NOCHECK, cmd.buffer, cmd.start, cmd.len);
+        let available = tur.res.sendResContent(Tour.TOUR_ID_NOCHECK, cmd.buffer, cmd.start, cmd.len);
         if (tur.res.bytesPosted == tur.res.bytesLimit) {
             this.endResContent(tur);
             return NextSocketAction.CONTINUE;
@@ -141,7 +165,7 @@ export class H1WarpHandler extends H1ProtocolHandler implements WarpHandler {
         return new WarpData(this.getWarpShip(), warpId);
     }
 
-    postWarpHeaders(tur: Tour): void {
+    sendReqHeaders(tur: Tour): void {
         let town = tur.town;
 
         //BayServer.debug(this + " construct header");
@@ -196,23 +220,23 @@ export class H1WarpHandler extends H1ProtocolHandler implements WarpHandler {
         this.getWarpShip().post(cmd);
     }
 
-    postWarpContents(tur: Tour, buf: Buffer, start: number, len: number, lis: DataConsumeListener): void {
+    sendReqContent(tur: Tour, buf: Buffer, start: number, len: number, lis: DataConsumeListener): void {
         let newBuf = Buffer.alloc(len)
         buf.copy(newBuf, 0, start, start + len)
         let cmd = new CmdContent(newBuf, 0, len);
         this.getWarpShip().post(cmd, lis);
     }
 
-    postWarpEnd(tur: Tour): void {
-        let cmd = new CmdContent(Buffer.alloc(0), 0, 0)
-        let callback = () => {
-            this.ship.agent.nonBlockingHandler.askToRead(this.ship.ch)
-        }
-
-        this.getWarpShip().post(cmd, callback)
+    sendEndReq(tur: Tour, keepAlive: boolean, lis: DataConsumeListener): void {
+        let cmd = new CmdEndContent()
+        this.getWarpShip().post(cmd, lis)
     }
 
     verifyProtocol(protocol: string): void {
+    }
+
+    onProtocolError(e: ProtocolException): boolean {
+        return false;
     }
 
     //////////////////////////////////////////////////////
@@ -225,7 +249,7 @@ export class H1WarpHandler extends H1ProtocolHandler implements WarpHandler {
 
     private endResContent(tur: Tour): void {
         this.getWarpShip().endWarpTour(tur);
-        tur.res.endContent(Tour.TOUR_ID_NOCHECK);
+        tur.res.endResContent(Tour.TOUR_ID_NOCHECK);
         this.resetState();
         this.getWarpShip().keeping = true;
     }
@@ -235,7 +259,7 @@ export class H1WarpHandler extends H1ProtocolHandler implements WarpHandler {
     }
 
     private getWarpShip() {
-        return this.ship as WarpShip
+        return this.protocolHandler.ship as WarpShip
     }
 
 

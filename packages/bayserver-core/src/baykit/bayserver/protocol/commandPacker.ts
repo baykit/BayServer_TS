@@ -4,8 +4,9 @@ import {CommandHandler} from "./commandHandler";
 import {Reusable} from "../util/Reusable";
 import {PacketPacker} from "./packetPacker";
 import {PacketStore} from "./packetStore";
-import {Ship} from "../watercraft/ship";
+import {Ship} from "../ship/ship";
 import {BayLog} from "../bayLog";
+import {DataConsumeListener} from "../util/dataConsumeListener";
 
 export class CommandPacker<C extends Command<C, P, H>, P extends Packet, H extends CommandHandler<C>>
     implements Reusable {
@@ -29,29 +30,21 @@ export class CommandPacker<C extends Command<C, P, H>, P extends Packet, H exten
     // Custom methods
     //////////////////////////////////////////////////////
 
-    public post(sip: Ship, cmd: C, listener: () => void = null): void {
+    public post(sip: Ship, cmd: C, listener: DataConsumeListener = null): void {
         let pkt: P  = this.pktStore.rent(cmd.type);
 
         try {
             cmd.pack(pkt);
-            this.pktPacker.post(sip.postman, pkt, () => {
+            this.pktPacker.post(sip, pkt, () => {
                 //BayLog.debug("%s callback & return packet", sip)
                 this.pktStore.Return(pkt);
-            if (listener != null)
-                listener();
-            });
+                if (listener != null)
+                    listener();
+                });
         }
         catch(e) {
             this.pktStore.Return(pkt);
             throw e;
         }
-    }
-
-    public flush(ship: Ship): void {
-        this.pktPacker.flush(ship.postman);
-    }
-
-    public end(ship: Ship): void {
-        this.pktPacker.end(ship.postman);
     }
 }

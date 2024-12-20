@@ -15,10 +15,11 @@ import {HttpException} from "../../httpException";
 import {HttpStatus} from "../../util/httpStatus";
 import {HttpHeaders} from "../../util/httpHeaders";
 import {Docker} from "../docker";
+import {SocketRudder} from "../../rudder/socketRudder";
 
 interface PermissionMatcher {
 
-    matchSocket(ch: net.Socket): boolean;
+    matchSocket(rd: SocketRudder): boolean;
     matchTour(tur: Tour): boolean
 }
 class CheckItem {
@@ -32,8 +33,8 @@ class CheckItem {
         this.admit = admit;
     }
 
-    socketAdmitted(ch: net.Socket): boolean {
-        return this.matcher.matchSocket(ch) == this.admit
+    socketAdmitted(rd: SocketRudder): boolean {
+        return this.matcher.matchSocket(rd) == this.admit
     }
 
     tourAdmitted(tur: Tour): boolean {
@@ -49,8 +50,8 @@ class HostPermissionMatcher implements PermissionMatcher {
         this.mch = new HostMatcher(hostPtn)
     }
 
-    matchSocket(ch: net.Socket): boolean {
-        return this.mch.match(ch.remoteAddress)
+    matchSocket(rd: SocketRudder): boolean {
+        return this.mch.match(rd.getRemoteAddress())
     }
 
     matchTour(tur: Tour): boolean {
@@ -64,8 +65,8 @@ class IpPermissionMatcher implements PermissionMatcher {
     constructor(ipDesc: string) {
         this.mch = new IpMatcher(ipDesc)
     }
-    matchSocket(ch: net.Socket): boolean {
-        return this.mch.match(ch.remoteAddress);
+    matchSocket(rd: SocketRudder): boolean {
+        return this.mch.match(rd.getRemoteAddress());
     }
 
     matchTour(tur: Tour): boolean {

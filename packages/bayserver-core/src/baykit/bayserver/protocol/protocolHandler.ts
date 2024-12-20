@@ -5,33 +5,55 @@ import {Packet} from "./packet";
 import {PacketPacker} from "./packetPacker";
 import {CommandUnPacker} from "./commandUnpacker";
 import {CommandPacker} from "./commandPacker";
-import {PacketStore} from "./packetStore";
-import {Ship} from "../watercraft/ship";
+import {Ship} from "../ship/ship";
+import {CommandHandler} from "./commandHandler";
+import {Buffer} from "buffer";
+import {DataConsumeListener} from "../util/dataConsumeListener";
 
-export abstract class ProtocolHandler <C extends Command<C, P, any>, P extends Packet>
+export abstract class ProtocolHandler <C extends Command<C, P, CommandHandler<C>>, P extends Packet>
     implements Reusable {
 
-    public packetUnpacker: PacketUnpacker<P> ;
-    public packetPacker: PacketPacker<P>;
-    public commandUnpacker: CommandUnPacker<P>;
-    public commandPacker: CommandPacker<C, P, any>;
-    public packetStore: PacketStore<P>;
-    public serverMode: boolean;
-    public ship: Ship;
+    readonly packetUnpacker: PacketUnpacker<P> ;
+    readonly packetPacker: PacketPacker<P>;
+    readonly commandUnpacker: CommandUnPacker<P>;
+    readonly commandPacker: CommandPacker<C, P, CommandHandler<C>>;
+    readonly commandHandler: CommandHandler<C>
+    readonly serverMode: boolean;
+    ship: Ship;
 
-    public abstract protocol(): string;
+
+    protected constructor(
+        packetUnpacker: PacketUnpacker<P>,
+        packetPacker: PacketPacker<P>,
+        commandUnpacker: CommandUnPacker<P>,
+        commandPacker: CommandPacker<C, P, CommandHandler<C>>,
+        commandHandler: CommandHandler<C>,
+        serverMode: boolean) {
+        this.packetUnpacker = packetUnpacker;
+        this.packetPacker = packetPacker;
+        this.commandUnpacker = commandUnpacker;
+        this.commandPacker = commandPacker;
+        this.commandHandler = commandHandler;
+        this.serverMode = serverMode;
+    }
+
+    abstract protocol(): string;
 
     /**
      * Get max of request data size (maybe not packet size)
      */
-    public abstract maxReqPacketDataSize(): number;
+    abstract maxReqPacketDataSize(): number;
 
     /**
      * Get max of response data size (maybe not packet size)
      */
-    public abstract maxResPacketDataSize(): number;
+    abstract maxResPacketDataSize(): number;
 
-    public toString(): string {
+    init(ship: Ship): void {
+        this.ship = ship
+    }
+
+    toString(): string {
         return "PH:ship=" + this.ship;
     }
 
@@ -39,18 +61,24 @@ export abstract class ProtocolHandler <C extends Command<C, P, any>, P extends P
     // Implements Reusable
     //////////////////////////////////////////////////////
 
-    public reset(): void {
+    reset(): void {
         this.commandUnpacker.reset();
         this.commandPacker.reset();
         this.packetPacker.reset();
         this.packetUnpacker.reset();
+        this.commandHandler.reset()
+        this.ship = null
     }
 
     //////////////////////////////////////////////////////
     // Other methods
     //////////////////////////////////////////////////////
 
-    public bytesReceived(buf: Buffer): number {
+    bytesReceived(buf: Buffer): number {
         return this.packetUnpacker.bytesReceived(buf);
+    }
+
+    post(cmd: C, listener: DataConsumeListener = null): void {
+        this.commandPacker.post(this.ship, cmd, listener)
     }
 }

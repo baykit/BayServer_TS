@@ -3,7 +3,6 @@ import {H1Command} from "./h1Command";
 import {H1Packet} from "./h1Packet";
 import {PacketStore} from "bayserver-core/baykit/bayserver/protocol/packetStore";
 import {ProtocolHandler} from "bayserver-core/baykit/bayserver/protocol/protocolHandler";
-import {Tour} from "bayserver-core/baykit/bayserver/tour/tour";
 import {InboundHandler} from "bayserver-core/baykit/bayserver/docker/base/inboundHandler";
 import { ProtocolException } from "bayserver-core/baykit/bayserver/protocol/protocolException";
 import { DataConsumeListener } from "bayserver-core/baykit/bayserver/util/dataConsumeListener";
@@ -11,7 +10,7 @@ import {H1ProtocolHandler} from "./h1ProtocolHandler";
 import { CmdContent } from "./command/cmdContent";
 import { CmdEndContent } from "./command/cmdEndContent";
 import { CmdHeader } from "./command/cmdHeader";
-import {InboundShip} from "bayserver-core/baykit/bayserver/docker/base/inboundShip";
+import {InboundShip} from "bayserver-core/baykit/bayserver/common/inboundShip";
 import {BayLog} from "bayserver-core/baykit/bayserver/bayLog";
 import {HtpPortDocker} from "../htpPortDocker";
 import {ProtocolHandlerStore} from "bayserver-core/baykit/bayserver/protocol/protocolHandlerStore";
@@ -27,21 +26,45 @@ import {ReqContentHandlerUtil} from "bayserver-core/baykit/bayserver/tour/reqCon
 import {HttpHeaders} from "bayserver-core/baykit/bayserver/util/httpHeaders";
 import {HttpUtil} from "bayserver-core/baykit/bayserver/util/httpUtil";
 import {Sink} from "bayserver-core/baykit/bayserver/sink";
+import {SocketRudder} from "bayserver-core/baykit/bayserver/rudder/socketRudder";
+import {Tour} from "bayserver-core/baykit/bayserver/tour/tour";
+import {H1CommandUnPacker} from "./h1CommandUnPacker";
+import {H1PacketUnpacker} from "./h1PacketUnPacker";
+import {PacketPacker} from "bayserver-core/baykit/bayserver/protocol/packetPacker";
+import {CommandPacker} from "bayserver-core/baykit/bayserver/protocol/commandPacker";
+import {H1Handler} from "./h1Handler";
+import {PacketUnpacker} from "bayserver-core/baykit/bayserver/protocol/packetUnpacker";
 
 export class H1InboundProtocolHandlerFactory implements ProtocolHandlerFactory<H1Command, H1Packet> {
 
     createProtocolHandler(pktStore: PacketStore<H1Packet>): ProtocolHandler<H1Command, H1Packet> {
-        return new H1InboundHandler(pktStore);
+        let inboundHandler = new H1InboundHandler()
+        let commandUnpacker = new H1CommandUnPacker(inboundHandler, true)
+        let packetUnpacker: PacketUnpacker<H1Packet> = new H1PacketUnpacker(commandUnpacker, pktStore)
+        let packetPacker: PacketPacker<H1Packet> = new PacketPacker<H1Packet>()
+        let commandPacker: CommandPacker<H1Command, H1Packet, any> = new CommandPacker(packetPacker, pktStore)
+        let protocolHandler =
+            new H1ProtocolHandler(
+                inboundHandler,
+                packetUnpacker,
+                packetPacker,
+                commandUnpacker,
+                commandPacker,
+                true
+            )
+        inboundHandler.init(protocolHandler)
+        return protocolHandler;
     }
 }
 
-export class H1InboundHandler extends H1ProtocolHandler implements InboundHandler {
+export class H1InboundHandler implements H1Handler, InboundHandler {
 
 
     private static readonly STATE_READ_HEADER: number = 1;
     private static readonly STATE_READ_CONTENT: number = 2;
     private static readonly STATE_FINISHED: number = 3;
 
+    protocolHandler: H1ProtocolHandler
     headerRead: boolean ;
     httpProtocol: string;
 
@@ -50,16 +73,23 @@ export class H1InboundHandler extends H1ProtocolHandler implements InboundHandle
     curTour: Tour;
     curTourId: number;
 
-    constructor(pktStore: PacketStore<H1Packet>) {
-        super(pktStore, true);
+    constructor() {
         this.resetState();
     }
+
+    init(ph: H1ProtocolHandler) {
+        this.protocolHandler = ph
+    }
+
+    toString() {
+        return "H1InboundHandler[" + this.protocolHandler + "]"
+    }
+
 
     //////////////////////////////////////////////////////
     // Implements Reusable
     //////////////////////////////////////////////////////
     reset() {
-        super.reset();
         this.resetState();
         this.headerRead = false;
         this.httpProtocol = null;
@@ -73,7 +103,7 @@ export class H1InboundHandler extends H1ProtocolHandler implements InboundHandle
     // Implements InboundHandler
     //////////////////////////////////////////////////////
 
-    sendResHeaders(tur: Tour) {
+    sendResHeaders(tur: Tour): void {
         var resCon: string;
 
         // determine Connection header value
@@ -106,33 +136,34 @@ export class H1InboundHandler extends H1ProtocolHandler implements InboundHandle
         }
 
         let cmd: CmdHeader = CmdHeader.newResHeader(tur.res.headers, tur.req.protocol);
-        this.commandPacker.post(this.ship, cmd, null);
+        this.protocolHandler.post(cmd, null);
     }
 
 
     sendResContent(tur: Tour, bytes: Buffer, ofs: number, len: number, lis: DataConsumeListener) {
         let cmd = new CmdContent(bytes, ofs, len);
-        this.commandPacker.post(this.ship, cmd, lis);
+        this.protocolHandler.post(cmd, lis);
     }
 
     sendEndTour(tur: Tour, keepAlive: boolean, lis: DataConsumeListener) {
-        BayLog.trace("%s sendEndTour: tur=%s keep=%s", this.ship, tur, keepAlive);
+        let sip = this.ship()
+        BayLog.trace("%s sendEndTour: tur=%s keep=%s", sip, tur, keepAlive);
 
         // Send end request command
-        let sid = this.ship.shipId
+        let sid = sip.shipId
         let ensureFunc = () => {
-            if(keepAlive && !this.ship.postman.isZombie()) {
-                this.ship.keeping = true;
-                this.ship.resume(sid)
+            if(keepAlive) {
+                sip.keeping = true;
+                sip.resumeRead(sid)
             }
             else
-                this.commandPacker.end(this.ship);
+                sip.postClose();
         };
 
         let cmd = new CmdEndContent();
         try {
-            this.commandPacker.post(this.ship, cmd, () => {
-                BayLog.debug("%s call back of end content command: tur=%s", this.ship, tur);
+            this.protocolHandler.post(cmd, () => {
+                BayLog.debug("%s call back of end content command: tur=%s", sip, tur);
                 ensureFunc();
                 lis();
             });
@@ -143,10 +174,10 @@ export class H1InboundHandler extends H1ProtocolHandler implements InboundHandle
         }
     }
 
-    sendReqProtocolError(e: ProtocolException): boolean {
+    onProtocolError(e: ProtocolException): boolean {
         let tur: Tour;
         if(this.curTour == null)
-            tur = this.inboundShip().getErrorTour();
+            tur = this.ship().getErrorTour();
         else
             tur = this.curTour;
 
@@ -158,7 +189,7 @@ export class H1InboundHandler extends H1ProtocolHandler implements InboundHandle
     // Implements H1CommandHandler
     //////////////////////////////////////////////////////
     handleHeader(cmd: CmdHeader): number {
-        let sip = this.inboundShip()
+        let sip = this.ship()
         BayLog.debug("%s handleHeader: method=%s uri=%s proto=%s", sip, cmd.method, cmd.uri, cmd.version);
 
         if (this.state == H1InboundHandler.STATE_FINISHED)
@@ -174,10 +205,10 @@ export class H1InboundHandler extends H1ProtocolHandler implements InboundHandle
         // check HTTP2
         let protocol = cmd.version.toUpperCase();
         if (protocol == "HTTP/2.0") {
-            let port = sip.portDocker as HtpPortDocker;
+            let port = sip.portDocker as unknown as HtpPortDocker;
             if(port.supportH2) {
-                sip.portDocker.returnProtocolHandler(sip.agent, this);
-                let newHnd = ProtocolHandlerStore.getStore(HtpDockerConst.H2_PROTO_NAME, true, sip.agent.agentId).rent();
+                sip.portDocker.returnProtocolHandler(sip.agentId, this.protocolHandler);
+                let newHnd = ProtocolHandlerStore.getStore(HtpDockerConst.H2_PROTO_NAME, true, sip.agentId).rent();
                 sip.setProtocolHandler(newHnd);
                 throw new UpgradeException();
             }
@@ -232,11 +263,7 @@ export class H1InboundHandler extends H1ProtocolHandler implements InboundHandle
         }
 
         if(reqContLen > 0) {
-            let sid = this.ship.shipId;
-            tur.req.setConsumeListener(reqContLen, (len, resume) => {
-                if (resume)
-                    sip.resume(sid);
-            });
+            tur.req.setLimit(reqContLen)
         }
 
         try {
@@ -268,14 +295,14 @@ export class H1InboundHandler extends H1ProtocolHandler implements InboundHandle
                 BayLog.trace(this + " error sending is delayed");
                 this.changeState(H1InboundHandler.STATE_READ_CONTENT);
                 tur.error = e;
-                tur.req.setContentHandler(ReqContentHandlerUtil.devNull);
+                tur.req.setReqContentHandler(ReqContentHandlerUtil.devNull);
                 return NextSocketAction.CONTINUE;
             }
         }
     }
 
     handleContent(cmd: CmdContent): number {
-        BayLog.debug("%s handleContent: len=%s", this.ship, cmd.len);
+        BayLog.debug("%s handleContent: len=%s", this.ship(), cmd.len);
 
         if (this.state != H1InboundHandler.STATE_READ_CONTENT) {
             let s = this.state;
@@ -285,35 +312,45 @@ export class H1InboundHandler extends H1ProtocolHandler implements InboundHandle
 
         let tur = this.curTour;
         let tourId = this.curTourId;
-        let success = tur.req.postContent(tourId, cmd.buffer, cmd.start, cmd.len);
 
-        if (tur.req.bytesPosted == tur.req.bytesLimit) {
-            if(tur.error != null){
-                // Error has occurred on header completed
-                tur.res.sendHttpException(tourId, tur.error);
-                this.resetState();
-                return NextSocketAction.WRITE;
-            }
-            else {
-                try {
+        try {
+            let sid = this.ship().shipId
+            let success =
+                tur.req.postReqContent(
+                    tourId,
+                    cmd.buffer,
+                    cmd.start,
+                    cmd.len,
+                    (len, resume) => {
+                        if (resume)
+                            tur.ship.resumeRead(sid);
+                    });
+
+            if (tur.req.bytesPosted == tur.req.bytesLimit) {
+                if (tur.error != null) {
+                    // Error has occurred on header completed
+                    BayLog.debug("%s Delay send error", tur);
+                    throw tur.error;
+                }
+                else {
                     this.endReqContent(tourId, tur);
-                    return NextSocketAction.SUSPEND;
-                } catch (e) {
-                    if(!(e instanceof HttpException))
-                        throw e
-                    else {
-                        tur.res.sendHttpException(tourId, e);
-                        this.resetState();
-                        return NextSocketAction.WRITE;
-                    }
+                    return NextSocketAction.CONTINUE;
                 }
             }
-        }
 
-        if(!success)
-            return NextSocketAction.SUSPEND;
-        else
-            return NextSocketAction.CONTINUE;
+            if (!success)
+                return NextSocketAction.SUSPEND; // end reading
+            else
+                return NextSocketAction.CONTINUE;
+        }
+        catch(e) {
+            if(e instanceof HttpException) {
+                tur.req.abort()
+                tur.res.sendHttpException(tourId, e)
+                this.resetState()
+                return NextSocketAction.WRITE
+            }
+        }
     }
 
     handleEndContent(cmdEndContent: CmdEndContent): number {
@@ -327,19 +364,24 @@ export class H1InboundHandler extends H1ProtocolHandler implements InboundHandle
     //////////////////////////////////////////////////////
     // Private methods
     //////////////////////////////////////////////////////
+
+    private ship() : InboundShip {
+        return this.protocolHandler.ship as InboundShip
+    }
+
     private endReqContent(chkTurId: number, tur: Tour) : void {
         tur.req.endContent(chkTurId);
         this.resetState();
     }
 
     startTour(tur: Tour) {
-        let secure = this.inboundShip().portDocker.isSecure();
+        let secure = this.ship().portDocker.isSecure();
         HttpUtil.parseHostPort(tur, secure ? 443 : 80);
         HttpUtil.parseAuthrization(tur);
 
         // Get remote address
         let clientAdr = tur.req.headers.get(HttpHeaders.X_FORWARDED_FOR);
-        let skt = this.ship.ch.socket;
+        let skt = (this.ship().rudder as SocketRudder).socket();
         if (clientAdr != null) {
             tur.req.remoteAddress = clientAdr;
             tur.req.remotePort = -1;
@@ -387,9 +429,5 @@ export class H1InboundHandler extends H1ProtocolHandler implements InboundHandle
         this.headerRead = false;
         this.changeState(H1InboundHandler.STATE_FINISHED);
         this.curTour = null;
-    }
-
-    private inboundShip(): InboundShip {
-        return this.ship as InboundShip;
     }
 }

@@ -14,28 +14,23 @@ import {CmdParams} from "./command/cmdParams";
 import {CmdStdErr} from "./command/cmdStdErr";
 import {CmdStdIn} from "./command/cmdStdIn";
 import {CmdStdOut} from "./command/cmdStdOut";
+import {FcgHandler} from "./fcgHandler";
+import {PacketUnpacker} from "bayserver-core/baykit/bayserver/protocol/packetUnpacker";
+import {CommandUnPacker} from "bayserver-core/baykit/bayserver/protocol/commandUnpacker";
 
-export abstract class FcgProtocolHandler
-    extends ProtocolHandler<FcgCommand, FcgPacket>
-    implements FcgCommandHandler {
-    protected constructor(
-        pktStore: PacketStore<FcgPacket>,
+export class FcgProtocolHandler
+    extends ProtocolHandler<FcgCommand, FcgPacket> {
+
+    constructor(
+        fcgHandler: FcgHandler,
+        packetUnpacker: PacketUnpacker<FcgPacket>,
+        packetPacker: PacketPacker<FcgPacket>,
+        commandUnpacker: CommandUnPacker<FcgPacket>,
+        commandPacker: CommandPacker<FcgCommand, FcgPacket, any>,
         svrMode: boolean
     ) {
-        super();
-        this.commandUnpacker = new FcgCommandUnPacker(this);
-        this.packetUnpacker = new FcgPacketUnpacker(pktStore, this.commandUnpacker as FcgCommandUnPacker);
-        this.packetPacker = new PacketPacker<FcgPacket>();
-        this.commandPacker = new CommandPacker<FcgCommand, FcgPacket, FcgCommandHandler>(this.packetPacker, pktStore);
-        this.serverMode = svrMode;
+        super(packetUnpacker, packetPacker, commandUnpacker, commandPacker, fcgHandler, svrMode);
     }
-
-    abstract handleBeginRequest(cmd: CmdBeginRequest): number;
-    abstract handleEndRequest(cmd: CmdEndRequest): number;
-    abstract handleParams(cmd: CmdParams): number;
-    abstract handleStdErr(cmd: CmdStdErr): number;
-    abstract handleStdIn(cmd: CmdStdIn): number;
-    abstract handleStdOut(cmd: CmdStdOut): number;
 
     /////////////////////////////////////////////////////////
     // Implements ProtocolHandler

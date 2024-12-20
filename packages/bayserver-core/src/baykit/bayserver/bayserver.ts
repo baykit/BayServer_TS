@@ -19,22 +19,28 @@ import {SignalAgent} from "./agent/signal/signalAgent";
 import {Version} from "./version";
 import {hostname} from "os";
 import {Symbol} from "./symbol";
-import {PortMapItem} from "./agent/portMapItem";
 import {GrandAgent} from "./agent/grandAgent";
 import {StrUtil} from "./util/strUtil";
 import * as net from "net";
 import path = require("path");
 import {Cities} from "./util/cities";
 import {PacketStore} from "./protocol/packetStore";
-import {InboundShipStore} from "./docker/base/inboundShipStore";
+import {InboundShipStore} from "./common/inboundShipStore";
 import {ProtocolHandlerStore} from "./protocol/protocolHandlerStore";
 import {TourStore} from "./tour/tourStore";
 import {MemUsage} from "./memUsage";
-import {GrandAgentMonitor} from "./agent/grandAgentMonitor";
+import {GrandAgentMonitor} from "./agent/monitor/grandAgentMonitor";
 import * as fs from "fs";
 import {SignalSender} from "./agent/signal/signalSender";
 import {Md5Password} from "./util/md5Password";
 import {IOException} from "./util/ioException";
+import {Rudder} from "./rudder/rudder";
+import {ServerRudder} from "./rudder/serverRudder";
+import {SocketRudder} from "./rudder/socketRudder";
+import {Server} from "net";
+import {WriteStream} from "fs";
+import {promisify} from "util";
+import {finished} from 'stream';
 
 export class BayServer {
 
@@ -65,6 +71,17 @@ export class BayServer {
 
     /** BayAgent */
     public static signalAgent: SignalAgent;
+
+    /** Redirected output stream */
+    public static logConsole: WriteStream
+
+    /** Original console */
+    public static originalConsoleLog: (message?: any, ...optionalParams: any[]) => void;
+    public static originalConsoleError: (message?: any, ...optionalParams: any[]) => void;
+
+    /** Port map */
+    public static readonly anchorablePortMap: Map<Rudder, Port> = new Map();   // TCP server port map
+    public static readonly unanchorablePortMap: Map<Rudder, Port> = new Map();   // TCP server port map
 
     public static main(args:string[]) {
 
@@ -196,6 +213,10 @@ export class BayServer {
     }
 
     public static start(agentId: number, openPort: boolean, monitorPort: number) {
+        process.on('exit', (code) => {
+            this.originalConsoleLog(`***************** Process exiting with code: ${code} *******************`);
+        });
+
         try {
             BayMessage.init(this.bservLib + "/conf/messages", new Locale("ja", "JP"));
             BayDockers.init(this.bservLib + "/conf/dockers.bcf");
@@ -210,6 +231,8 @@ export class BayServer {
             TourStore.init(TourStore.MAX_TOURS);
             MemUsage.init()
 
+            this.originalConsoleLog = console.log
+            this.originalConsoleError = console.error
             let redirectFile = this.harbor.getRedirectFile()
             if (StrUtil.isSet(redirectFile)) {
                 redirectFile = this.getLocation(redirectFile)
@@ -226,16 +249,16 @@ export class BayServer {
                     }
                     redirectFile = filePrefix + "-" + agentId + fileExt
                 }
-                let newConsole = fs.createWriteStream(redirectFile)
-                newConsole.on('error', (err) => {
+                this.logConsole = fs.createWriteStream(redirectFile)
+                this.logConsole.on('error', (err) => {
                     BayLog.error_e(err, BayMessage.get(Symbol.CFG_CANNOT_OPEN_REDIRECT_FILE, redirectFile))
                     throw new Error(BayMessage.get(Symbol.CFG_CANNOT_OPEN_REDIRECT_FILE, redirectFile))
                 })
-                newConsole.on('open', () => {
+                this.logConsole.on('open', () => {
                     BayLog.debug(BayMessage.get(Symbol.MSG_REDIRECT_FILE_OPENED, redirectFile))
                     console.log = (...args: any[]) => {
                         let message = args.join(' ');
-                        newConsole.write(message + '\n');
+                        this.logConsole.write(message + '\n')
                     };
                     console.error = console.log
                 })
@@ -253,11 +276,14 @@ export class BayServer {
         }
         catch (e) {
             BayLog.error_e(e);
-            exit(1);
+            // Exit after 5 seconds
+            setTimeout(() => {
+                exit(1)
+            }, 5000)
         }
     }
 
-    private static openPorts(anchoredPortMap: PortMapItem[], callback: () => void) {
+    private static openPorts(callback: () => void) {
 
         let curIndex = 0
         for (const portDkr of this.ports) {
@@ -267,33 +293,15 @@ export class BayServer {
                 BayLog.info(BayMessage.get(Symbol.MSG_OPENING_TCP_PORT, portDkr.getHost() == null ? "" : portDkr.getHost(), portDkr.getPort(), portDkr.protocol()));
 
                 let ch = portDkr.createServer()
+                let rd = new ServerRudder(ch)
 
                 ch.on('error', (err) => {
                     BayLog.error("Server socket error: %s", err)
                 })
 
-                /*
-                ch.on('connection', (socket: net.Socket) => {
-                    let agt: GrandAgent = null
-                    try {
-                        agt = GrandAgent.getByIndex(curIndex)
-                        BayLog.debug("%s Accepted on parent process", agt)
-                        agt.acceptHandler.onAccept(ch, socket)
-                        if(!BayServer.harbor.isMultiCore())
-                            curIndex = (curIndex + 1) % BayServer.harbor.getNumGrandAgents()
-                    }
-                    catch(e) {
-                        BayLog.error_e(e)
-                        if(agt) {
-                            agt.abort(e)
-                        }
-                    }
-                });
-                */
-
                 ch.listen(portDkr.getPort(), () => {
-                    anchoredPortMap.push(new PortMapItem(ch, portDkr))
-                    if (anchoredPortMap.length == this.ports.length) {
+                    this.anchorablePortMap.set(rd, portDkr)
+                    if (this.anchorablePortMap.size == this.ports.length) {
                         callback()
                     }
                 })
@@ -302,47 +310,40 @@ export class BayServer {
                 throw new BayException()
             }
         }
-
     }
 
     private static parentStart() {
 
-        let anchoredPortMap: PortMapItem[] = [];   // TCP server port map
-        if (!BayServer.harbor.isMultiCore()) {
-            // Single core not supported!
 
+        if (!BayServer.harbor.isMultiCore()) {
             // Single core mode
-            this.openPorts(anchoredPortMap, () => {
+            this.openPorts(() => {
             })
 
             // Single core mode
             GrandAgent.init(
                 Array.from({length: BayServer.harbor.getNumGrandAgents()}, (_, index) => index + 1),
-                anchoredPortMap,
-                null,
-                BayServer.harbor.getMaxShips(),
-                BayServer.harbor.isMultiCore())
+                BayServer.harbor.getMaxShips())
         }
 
-        GrandAgentMonitor.init(this.harbor.getNumGrandAgents(), anchoredPortMap)
+        GrandAgentMonitor.init(this.harbor.getNumGrandAgents(), this.anchorablePortMap)
         SignalAgent.init(this.harbor.getControlPort())
         this.createPidFile(SysUtil.pid())
     }
 
     private static childStart(agentId: number, openPort: boolean, monitorPort: number) {
-        let anchoredPortMap: PortMapItem[] = [];   // TCP server port map
-        //BayLog.info("child start: %d open=%s monitor=%d", agentId, openPort, monitorPort)
+        BayLog.debug("Child process start: agt#%d open=%s monitor=%d", agentId, openPort, monitorPort)
 
         if(openPort) {
-            //BayLog.info("agt#%d open port mode", agentId)
-            let anchoredPortMap: PortMapItem[] = [];   // TCP server port map
-            this.openPorts(anchoredPortMap, () => {
-                this.initChildGrandAgent(agentId, anchoredPortMap)
+            BayLog.info("agt#%d open port mode", agentId)
+            this.openPorts(() => {
+                BayLog.debug("init child (open port)")
+                this.initChildGrandAgent(agentId)
                 this.connectToMonitor(agentId, monitorPort)
             })
         }
         else {
-            //BayLog.info("agt#%d recv socket mode", agentId)
+            BayLog.info("agt#%d recv socket mode", agentId)
             process.on('message', (m: string, skt: net.Server | net.Socket) => {
                 if (m.startsWith('serverSocket')) {
 
@@ -350,7 +351,7 @@ export class BayServer {
                     let host = adr["address"]
                     let port = adr["port"]
                     var portDkr: Port = null
-                    //BayLog.info('agt#%d Received server Socket', agentId);
+                    BayLog.info('agt#%d Received server Socket', agentId);
 
                     for (const p of this.ports) {
                         if (p.getPort() == port) {
@@ -364,10 +365,11 @@ export class BayServer {
                         exit(1);
                     }
                     else {
-                        anchoredPortMap.push(new PortMapItem(skt as net.Server, portDkr))
-                        if (anchoredPortMap.length == this.ports.length) {
+                        BayServer.anchorablePortMap.set(new ServerRudder(skt as Server), portDkr)
+                        if (BayServer.anchorablePortMap.size == this.ports.length) {
                             // All ports are opened
-                            this.initChildGrandAgent(agentId, anchoredPortMap)
+                            BayLog.debug("init child (inherit port)")
+                            this.initChildGrandAgent(agentId)
                             this.connectToMonitor(agentId, monitorPort)
                         }
                     }
@@ -377,30 +379,42 @@ export class BayServer {
 
     }
 
-    private static initChildGrandAgent(agentId: number, anchoredPortMap: PortMapItem[]) {
+    private static initChildGrandAgent(agentId: number) {
+        BayLog.debug("Init child grand agent: agt#%d", agentId)
         GrandAgent.init(
             [agentId],
-            anchoredPortMap,
-            null,
-            this.harbor.getMaxShips(),
-            this.harbor.isMultiCore());
+            this.harbor.getMaxShips());
 
         let agt = GrandAgent.get(agentId)
-        for (const portMap of GrandAgent.anchorablePortMap) {
-            portMap.ch.on('connection', (socket: net.Socket) => {
-                BayLog.info("Accepted")
-                agt.acceptHandler.onAccept(portMap.ch, socket)
-            });
-        }
+        agt.run().then((result) => {
+            if(BayServer.harbor.isMultiCore()) {
+                console.log = this.originalConsoleLog
+                console.error = this.originalConsoleError
+            }
+            this.originalConsoleLog("logcon=" + BayServer.logConsole)
+            if(this.logConsole != null) {
+                this.logConsole.end()
+                const finishedAsync = promisify(finished)
+                this.originalConsoleLog("Wait finish event")
+                BayLog.info("Wait finish event")
+                finishedAsync(this.logConsole).then( () => {
+                    this.originalConsoleLog("Finished")
+                    if(this.harbor.isMultiCore()) {
+                        exit(1);
+                    }
+                });
+            }
 
+        })
     }
 
     private static connectToMonitor(agentId: number, monitorPort: number){
         //BayLog.debug("Connect to monitor: port=%d", monitorPort)
         const skt = net.createConnection({ host: "localhost", port: monitorPort }, () => {
-            //BayLog.debug("Connected to monitor: port=%d", monitorPort)
+            let rd = new SocketRudder(skt)
+            //BayLog.debug("Connected to monitor: port=%d rd=%s", monitorPort, rd)
             let agt = GrandAgent.get(agentId)
-            agt.runCommandReceiver(skt)
+            agt.addCommandReceiver(rd)
         });
 
         skt.on('error', err => {

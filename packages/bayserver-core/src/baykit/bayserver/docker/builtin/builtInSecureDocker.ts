@@ -9,13 +9,15 @@ import {BcfKeyVal} from "../../bcf/bcfKeyVal";
 import {StrUtil} from "../../util/strUtil";
 import {BayLog} from "../../bayLog";
 import * as fs from "fs";
-import {Transporter} from "../../agent/transporter/transporter";
 import {SysUtil} from "../../util/sysUtil";
 import {BayServer} from "../../bayserver";
 import {IOException} from "../../util/ioException";
 import * as tls from "tls";
-import {SecureTransporter} from "../../agent/transporter/secureTransporter";
+import {SecureTransporter} from "../../agent/multiplexer/secureTransporter";
 import * as net from "net";
+import {Ship} from "../../ship/ship";
+import {Transporter} from "../../agent/multiplexer/transporter";
+import {GrandAgent} from "../../agent/grandAgent";
 
 export class BuiltInSecureDocker extends DockerBase implements Secure{
     static readonly DEFAULT_CLIENT_AUTH = false
@@ -129,8 +131,16 @@ export class BuiltInSecureDocker extends DockerBase implements Secure{
         this.sslctx["ALPNProtocols"] = this.appProtocols
     }
 
-    createTransporter(): Transporter {
-        return new SecureTransporter(this.sslctx, true, this.traceSSL);
+    newTransporter(agtId: number, ship: Ship): Transporter {
+        let tp = new SecureTransporter(
+            GrandAgent.get(agtId).netMultiplexer,
+            ship,
+            true,
+            -1,
+            this.traceSSL,
+            this.sslctx,
+            this.appProtocols);
+        return tp
     }
 
     reloadCert() {

@@ -2,10 +2,8 @@ import {DockerBase} from "../base/dockerBase";
 import {Log} from "../log";
 import {Tour} from "../../tour/tour";
 import {LifeCycleListener} from "../../agent/lifeCycleListener";
-import {LogBoat} from "./logBoat";
 import {BayLog} from "../../bayLog";
 import * as fs from "fs";
-import {PlainTransporter} from "../../agent/transporter/plainTransporter";
 import {GrandAgent} from "../../agent/grandAgent";
 import {BayMessage} from "../../bayMessage";
 import {Symbol} from "../../symbol";
@@ -28,7 +26,13 @@ import {BayServer} from "../../bayserver";
 import * as path from "path";
 import {BcfKeyVal} from "../../bcf/bcfKeyVal";
 import {LogItemFactory} from "./logItemFactory";
-import {ChannelWrapper} from "../../agent/channelWrapper";
+import {Multiplexer} from "../../common/multiplexer";
+import {Rudder} from "../../rudder/rudder";
+import {MULTIPLEXER_TYPE_PIGEON} from "../harbor";
+import {FileRudder} from "../../rudder/fileRudder";
+import {Sink} from "../../sink";
+import {RudderState} from "../../agent/multiplexer/rudderState";
+import {statSync} from "fs";
 
 class AgentListener implements LifeCycleListener {
 
@@ -41,50 +45,47 @@ class AgentListener implements LifeCycleListener {
 
     add(agtId: number) {
         let fileName = this.docker.filePrefix + "_" + agtId + "." + this.docker.fileExt;
-        let boat = new LogBoat();
 
         fs.open(fileName, "a", (err, fd) => {
             if (err) {
-                BayLog.error_e(err, "Cannot open file: %s", fileName)
+                BayLog.fatal_e(err, "Cannot open file: %s", fileName)
                 return;
             }
 
+            let size = statSync(fileName).size
             BayLog.debug("Log file opened: %s fd=%d", fileName, fd);
+            let agt = GrandAgent.get(agtId)
+            let mpx: Multiplexer = null
+            let rd: Rudder = null
+            switch(BayServer.harbor.getLogMultiplexer()) {
+                case MULTIPLEXER_TYPE_PIGEON:
+                    mpx = agt.pigeonMultiplexer
+                    rd = new FileRudder(fd)
+                    break
 
-            let tp
-            if(this.docker.logWriteMethod == BuiltInLogDocker.LOG_WRITE_METHOD_SELECT) {
-                tp = new PlainTransporter(false, 0, true) // write only
-                tp.init(GrandAgent.get(agtId).nonBlockingHandler, new ChannelWrapper(fd), boat)
-            }
-            else {
-                throw new Error("Log Write method not supported");
+                default:
+                    throw new Sink()
             }
 
-            try {
-                boat.initBoat(fileName, tp);
-            }
-            catch(e) {
-                BayLog.fatal(BayMessage.get(Symbol.INT_CANNOT_OPEN_LOG_FILE, fileName));
-                BayLog.fatal_e(e);
-            }
+            let st = new RudderState(rd)
+            st.bytesWrote = size
+            mpx.addRudderState(rd, st)
+            this.docker.multiplexers[agtId] = mpx
+            this.docker.rudders[agtId] = rd
         })
-
-        this.docker.loggers.set(agtId, boat);
     }
 
     remove(agtId: number) {
-        this.docker.loggers.delete(agtId)
+        let rd = this.docker.rudders[agtId]
+        this.docker.multiplexers[agtId].reqClose(rd)
+        this.docker.multiplexers[agtId] = null
+        this.docker.rudders[agtId] = null
     }
 
 }
 
 
 export class BuiltInLogDocker extends DockerBase implements Log {
-
-    static readonly LOG_WRITE_METHOD_SELECT: number = 1;
-    static readonly LOG_WRITE_METHOD_SPIN: number = 2;
-    static readonly LOG_WRITE_METHOD_TAXI: number = 3;
-    static readonly DEFAULT_LOG_WRITE_METHOD: number = BuiltInLogDocker.LOG_WRITE_METHOD_SELECT;
 
     /** Mapping table for format */
     static map: Map<string, LogItemFactory>
@@ -93,26 +94,23 @@ export class BuiltInLogDocker extends DockerBase implements Log {
     filePrefix: string;
     fileExt: string;
 
-    /**
-     *  Logger for each agent.
-     *  Map of Agent ID => LogBoat
-     */
-    loggers: Map<number, LogBoat>
-
     /** Log format */
     format: string;
 
     /** Log items */
     logItems: LogItem[] = []
 
-    /** Log write method */
-    logWriteMethod: number = BuiltInLogDocker.DEFAULT_LOG_WRITE_METHOD;
-
     static lineSep: string = os.EOL;
+
+    rudders: Map<number, Rudder>
+
+    /** Multiplexer to write to file */
+    multiplexers: Map<number, Multiplexer>
 
     constructor() {
         super();
-        this.loggers = new Map()
+        this.rudders = new Map<number, Rudder>()
+        this.multiplexers = new Map<number, Multiplexer>()
     }
 
     ////////////////////////////////////////
@@ -163,21 +161,6 @@ export class BuiltInLogDocker extends DockerBase implements Log {
             case "format":
                 this.format = kv.value;
                 break;
-
-            case "logwritemethod":
-                switch(kv.value.toLowerCase()) {
-                    case "select":
-                        this.logWriteMethod = BuiltInLogDocker.LOG_WRITE_METHOD_SELECT;
-                        break;
-                    case "spin":
-                        this.logWriteMethod = BuiltInLogDocker.LOG_WRITE_METHOD_SPIN;
-                        break;
-                    case "taxi":
-                        this.logWriteMethod = BuiltInLogDocker.LOG_WRITE_METHOD_TAXI;
-                        break;
-                    default:
-                        throw new ConfigException(kv.fileName, kv.lineNo, BayMessage.get(Symbol.CFG_INVALID_PARAMETER_VALUE, kv.value));
-                }
         }
         return true
     }
@@ -195,14 +178,15 @@ export class BuiltInLogDocker extends DockerBase implements Log {
                 sb += item
         }
 
-        // If threre are message to write, write it
+        // If there are message to write, write it
         if (sb.length > 0) {
-            try {
-                this.getLogger(tour.ship.agent).log(sb.toString());
-            }
-            catch(e) {
-                BayLog.error_e(e, "%s Error on logging: %s", tour, e.message)
-            }
+            this.multiplexers[tour.ship.agentId].reqWrite(
+                this.rudders[tour.ship.agentId],
+                Buffer.from(sb + os.EOL),
+                null,
+                "log",
+                null
+            )
         }
     }
 
@@ -280,10 +264,6 @@ export class BuiltInLogDocker extends DockerBase implements Log {
         item.init(param);
         items.push(item);
         this.compile(str, items, fileName, lineNo);
-    }
-
-    getLogger(agt: GrandAgent): LogBoat {
-        return this.loggers.get(agt.agentId)
     }
 
     ////////////////////////////////////////

@@ -18,7 +18,6 @@ import {DataConsumeListener} from "bayserver-core/baykit/bayserver/util/dataCons
 import {CmdEndRequest} from "./command/cmdEndRequest";
 import {IOException} from "bayserver-core/baykit/bayserver/util/ioException";
 import {ProtocolException} from "bayserver-core/baykit/bayserver/protocol/protocolException";
-import {InboundShip} from "bayserver-core/baykit/bayserver/docker/base/inboundShip";
 import {CmdBeginRequest} from "./command/cmdBeginRequest";
 import {BayMessage} from "bayserver-core/baykit/bayserver/bayMessage";
 import {NextSocketAction} from "bayserver-core/baykit/bayserver/agent/nextSocketAction";
@@ -29,15 +28,39 @@ import {ReqContentHandlerUtil} from "bayserver-core/baykit/bayserver/tour/reqCon
 import {CmdStdIn} from "./command/cmdStdIn";
 import {CmdStdErr} from "./command/cmdStdErr";
 import {CGIUtil} from "bayserver-core/baykit/bayserver/util/CGIUtil";
+import {PacketUnpacker} from "bayserver-core/baykit/bayserver/protocol/packetUnpacker";
+import {H1Packet} from "bayserver-docker-http/baykit/bayserver/docker/http/h1/h1Packet";
+import {H1PacketUnpacker} from "bayserver-docker-http/baykit/bayserver/docker/http/h1/h1PacketUnPacker";
+import {PacketPacker} from "bayserver-core/baykit/bayserver/protocol/packetPacker";
+import {CommandPacker} from "bayserver-core/baykit/bayserver/protocol/commandPacker";
+import {FcgCommandUnPacker} from "./fcgCommandUnPacker";
+import {FcgPacketUnpacker} from "./fcgPacketUnpacker";
+import {FcgHandler} from "./fcgHandler";
+import {InboundShip} from "bayserver-core/baykit/bayserver/common/inboundShip";
 
 export class FcgInboundHandler_ProtocolHandlerFactory implements ProtocolHandlerFactory<FcgCommand, FcgPacket> {
 
     createProtocolHandler(pktStore: PacketStore<FcgPacket>): ProtocolHandler<FcgCommand, FcgPacket> {
-        return new FcgInboundHandler(pktStore);
+        let inboundHandler = new FcgInboundHandler()
+        let commandUnpacker = new FcgCommandUnPacker(inboundHandler)
+        let packetUnpacker: PacketUnpacker<FcgPacket> = new FcgPacketUnpacker(pktStore, commandUnpacker)
+        let packetPacker: PacketPacker<FcgPacket> = new PacketPacker<FcgPacket>()
+        let commandPacker: CommandPacker<FcgCommand, FcgPacket, any> = new CommandPacker(packetPacker, pktStore)
+        let protocolHandler =
+            new FcgProtocolHandler(
+                inboundHandler,
+                packetUnpacker,
+                packetPacker,
+                commandUnpacker,
+                commandPacker,
+                true
+            )
+        inboundHandler.init(protocolHandler)
+        return protocolHandler;
     }
 }
 
-export class FcgInboundHandler extends FcgProtocolHandler implements InboundHandler {
+export class FcgInboundHandler implements InboundHandler, FcgHandler {
 
     static readonly STATE_READ_BEGIN_REQUEST: number = 1
     static readonly STATE_READ_PARAMS: number = 2
@@ -47,13 +70,18 @@ export class FcgInboundHandler extends FcgProtocolHandler implements InboundHand
     static readonly DUMMY_KEY: number = 1
 
     state: number
+    protocolHandler: FcgProtocolHandler
+
     env: Map<string, string> = new Map<string, string>()
     reqId: number
     reqKeepAlive: boolean
 
-    constructor(pktStore: PacketStore<FcgPacket>) {
-        super(pktStore, true);
+    constructor() {
         this.resetState()
+    }
+
+    init(ph: FcgProtocolHandler) {
+        this.protocolHandler = ph
     }
 
     //////////////////////////////////////////////////////////////////
@@ -61,7 +89,6 @@ export class FcgInboundHandler extends FcgProtocolHandler implements InboundHand
     //////////////////////////////////////////////////////////////////
 
     reset() : void {
-        super.reset();
         this.resetState();
         this.env.clear()
     }
@@ -71,7 +98,7 @@ export class FcgInboundHandler extends FcgProtocolHandler implements InboundHand
     //////////////////////////////////////////////////////////////////
 
     sendResHeaders(tur: Tour): void {
-        BayLog.debug(this.ship + " PH:sendHeaders: tur=" + tur);
+        BayLog.debug(this.ship() + " PH:sendHeaders: tur=" + tur);
 
         let scode = tur.res.headers.status;
         let status = scode + " " + HttpStatus.description(scode);
@@ -89,39 +116,39 @@ export class FcgInboundHandler extends FcgProtocolHandler implements InboundHand
         HttpUtil.sendMimeHeaders(tur.res.headers, buf);
         HttpUtil.sendNewLine(buf);
         let cmd = new CmdStdOut(tur.req.key, buf.buf, 0, buf.len);
-        this.commandPacker.post(tur.ship, cmd);
+        this.protocolHandler.post(cmd);
     }
 
     sendResContent(tur: Tour, bytes: Buffer, ofs: number, len: number, lis: DataConsumeListener): void {
         let cmd = new CmdStdOut(tur.req.key, bytes, ofs, len);
-        this.commandPacker.post(this.ship, cmd, lis);
+        this.protocolHandler.post(cmd, lis);
     }
 
     sendEndTour(tur: Tour, keepAlive: boolean, lis: DataConsumeListener): void {
 
-        BayLog.debug("%s PH:endTour: tur=%s keep=%s", this.ship, tur, keepAlive);
+        BayLog.debug("%s PH:endTour: tur=%s keep=%s", this.ship(), tur, keepAlive);
 
         // Send empty stdout command
         let cmd: FcgCommand = new CmdStdOut(tur.req.key);
-        this.commandPacker.post(this.ship, cmd);
+        this.protocolHandler.post(cmd);
 
         // Send end request command
         cmd = new CmdEndRequest(tur.req.key);
         let ensureFunc = () => {
             if(!keepAlive)
-                this.commandPacker.end(this.ship);
+                this.ship().postClose();
         };
 
         try {
-            this.commandPacker.post(this.ship, cmd, () => {
-                BayLog.debug("%s call back in sendEndTour: tur=%s keep=%b", this.ship, tur, keepAlive);
+            this.protocolHandler.post(cmd, () => {
+                BayLog.debug("%s call back in sendEndTour: tur=%s keep=%b", this.ship(), tur, keepAlive);
                 ensureFunc();
                 lis();
             });
         }
         catch(e) {
             if(e instanceof IOException) {
-                BayLog.debug("%s post faile in sendEndTour: tur=%s keep=%b", this.ship, tur, keepAlive);
+                BayLog.debug("%s post faile in sendEndTour: tur=%s keep=%b", this.ship(), tur, keepAlive);
                 ensureFunc();
             }
             throw e;
@@ -129,8 +156,8 @@ export class FcgInboundHandler extends FcgProtocolHandler implements InboundHand
 
     }
 
-    sendReqProtocolError(e: ProtocolException): boolean {
-        let ibShip = this.ship as InboundShip
+    onProtocolError(e: ProtocolException): boolean {
+        let ibShip = this.ship()
         let tur = ibShip.getErrorTour();
         tur.res.sendError(Tour.TOUR_ID_NOCHECK, HttpStatus.BAD_REQUEST, e.message, e);
         return true;
@@ -141,7 +168,7 @@ export class FcgInboundHandler extends FcgProtocolHandler implements InboundHand
     //////////////////////////////////////////////////////////////////
 
     handleBeginRequest(cmd: CmdBeginRequest): number {
-        let sip = this.ship as InboundShip;
+        let sip = this.ship()
         if (BayLog.isDebug())
             BayLog.debug(sip + " handleBeginRequest reqId=" + cmd.reqId + " keep=" + cmd.keepConn);
 
@@ -170,7 +197,7 @@ export class FcgInboundHandler extends FcgProtocolHandler implements InboundHand
     }
 
     handleParams(cmd: CmdParams): number {
-        let sip = this.ship as InboundShip
+        let sip = this.ship()
         if (BayLog.isDebug())
             BayLog.debug(sip + " handleParams reqId=" + cmd.reqId + " nParams=" + cmd.params.length);
 
@@ -208,11 +235,7 @@ export class FcgInboundHandler extends FcgProtocolHandler implements InboundHand
             }
 
             if(reqContLen > 0) {
-                let sid = this.ship.shipId;
-                tur.req.setConsumeListener(reqContLen, (len, resume) => {
-                    if (resume)
-                        sip.resume(sid);
-                });
+                tur.req.setLimit(reqContLen)
             }
 
             this.changeState(FcgInboundHandler.STATE_READ_STDIN);
@@ -234,7 +257,7 @@ export class FcgInboundHandler extends FcgProtocolHandler implements InboundHand
                         // Delay send
                         this.changeState(FcgInboundHandler.STATE_READ_STDIN);
                         tur.error = e;
-                        tur.req.setContentHandler(ReqContentHandlerUtil.devNull);
+                        tur.req.setReqContentHandler(ReqContentHandlerUtil.devNull);
                         return NextSocketAction.CONTINUE;
                     }
                 }
@@ -281,7 +304,7 @@ export class FcgInboundHandler extends FcgProtocolHandler implements InboundHand
     }
 
     handleStdIn(cmd: CmdStdIn): number {
-        let sip = this.ship as InboundShip
+        let sip = this.ship()
         BayLog.debug(sip + " handleStdIn reqId=" + cmd.reqId + " len=" + cmd.length);
 
         if(this.state != FcgInboundHandler.STATE_READ_STDIN)
@@ -314,7 +337,17 @@ export class FcgInboundHandler extends FcgProtocolHandler implements InboundHand
             }
         }
         else {
-            let success = tur.req.postContent(Tour.TOUR_ID_NOCHECK, cmd.data, cmd.start, cmd.length);
+            let sid = this.ship().shipId
+            let success =
+                tur.req.postReqContent(
+                    Tour.TOUR_ID_NOCHECK,
+                    cmd.data,
+                    cmd.start,
+                    cmd.length,
+                    (len, resume) => {
+                        if (resume)
+                            sip.resumeRead(sid);
+                    });
             //if(tur.reqBytesRead == contLen)
             //    endContent(tur);
 
@@ -356,7 +389,7 @@ export class FcgInboundHandler extends FcgProtocolHandler implements InboundHand
             this.reqId = receivedId;
 
         if (this.reqId != receivedId) {
-            BayLog.error(this.ship + " invalid request id: received=" + receivedId + " reqId=" + this.reqId);
+            BayLog.error(this.ship() + " invalid request id: received=" + receivedId + " reqId=" + this.reqId);
             throw new ProtocolException("Invalid request id: " + receivedId);
         }
     }
@@ -382,5 +415,8 @@ export class FcgInboundHandler extends FcgProtocolHandler implements InboundHand
         tur.go();
     }
 
+    ship(): InboundShip {
+        return this.protocolHandler.ship as InboundShip
+    }
 }
 

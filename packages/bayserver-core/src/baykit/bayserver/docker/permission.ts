@@ -1,8 +1,9 @@
 import {Tour} from "../tour/tour";
+import {Rudder} from "../rudder/rudder";
 
 export interface Permission {
 
-    socketAdmitted(ch);
+    socketAdmitted(rd: Rudder): void
 
-    tourAdmitted(tour: Tour)
+    tourAdmitted(tour: Tour): void
 }

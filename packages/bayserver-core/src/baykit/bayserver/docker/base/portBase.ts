@@ -4,16 +4,14 @@ import {Permission} from "../permission";
 import {Secure} from "../Secure";
 import {City} from "../city";
 import {GrandAgent} from "../../agent/grandAgent";
-import {Transporter} from "../../agent/transporter/transporter";
 import {ProtocolHandler} from "../../protocol/protocolHandler";
-import {InboundShip} from "./inboundShip";
+import {InboundShip} from "../../common/inboundShip";
 import {Docker} from "../docker";
-import {InboundShipStore} from "./inboundShipStore";
+import {InboundShipStore} from "../../common/inboundShipStore";
 import {IOUtil} from "../../util/ioUtil";
 import * as net from "net";
-import {PlainTransporter} from "../../agent/transporter/plainTransporter";
+import {PlainTransporter} from "../../agent/multiplexer/plainTransporter";
 import {ProtocolHandlerStore} from "../../protocol/protocolHandlerStore";
-import {InboundDataListener} from "./inboundDataListener";
 import {Cities} from "../../util/cities";
 import {BcfElement} from "../../bcf/bcfElement";
 import {StrUtil} from "../../util/strUtil";
@@ -22,8 +20,13 @@ import {BayMessage} from "../../bayMessage";
 import {Symbol} from "../../symbol";
 import {SysUtil} from "../../util/sysUtil";
 import {BcfKeyVal} from "../../bcf/bcfKeyVal";
-import {ChannelWrapper} from "../../agent/channelWrapper";
 import {BayLog} from "../../bayLog";
+import {Rudder} from "../../rudder/rudder";
+import {Transporter} from "../../agent/multiplexer/transporter";
+import {SocketRudder} from "../../rudder/socketRudder";
+import {RudderState} from "../../agent/multiplexer/rudderState";
+import {Socket} from "net";
+import {ServerRudder} from "../../rudder/serverRudder";
 export abstract class PortBase extends DockerBase implements Port, Docker {
 
     permissionList: Permission[] = [];
@@ -217,9 +220,9 @@ export abstract class PortBase extends DockerBase implements Port, Docker {
         return this.additionalHeaders;
     }
 
-    checkAdmitted(ch: net.Socket) {
+    checkAdmitted(rd: Rudder) {
         for(const p of this.permissionList)
-            p.socketAdmitted(ch)
+            p.socketAdmitted(rd)
     }
 
     getCities(): City[] {
@@ -231,29 +234,49 @@ export abstract class PortBase extends DockerBase implements Port, Docker {
     }
 
 
-    newTransporter(agent: GrandAgent, ch: ChannelWrapper): Transporter {
-        let sip: InboundShip = PortBase.getShipStore(agent).rent();
+    onConnected(agtId: number, clientRd: Rudder, serverRd: Rudder): Transporter {
+        this.checkAdmitted(clientRd)
+
+        let sip: InboundShip = PortBase.getShipStore(agtId).rent();
+        let agt = GrandAgent.get(agtId)
+
+        let clientSkt = (clientRd as SocketRudder).socket();
+        let serverSkt = (serverRd as ServerRudder).server;
+
         var tp: Transporter;
-        if(this.isSecure())
-            tp = this.secureDocker.createTransporter();
-        else
-            tp = new PlainTransporter(true, IOUtil.getSockRecvBufSize(ch.socket));
+        if(this.isSecure()) {
+            tp = this.secureDocker.newTransporter(agtId, sip);
+            let sslSkt = this.getSecure().createTlsSocket(clientSkt, serverSkt);
+            clientRd = new SocketRudder(sslSkt)
+        }
+        else {
+            tp = new PlainTransporter(
+                agt.netMultiplexer,
+                sip,
+                true,
+                IOUtil.getSockRecvBufSize(clientSkt),
+                false);
+        }
 
         let protoHnd: ProtocolHandler<any, any> =
-            PortBase.getProtocolHandlerStore(this.protocol(), agent).rent();
-        sip.initInbound(ch, agent, tp, this, protoHnd);
-        tp.init(agent.nonBlockingHandler, ch, new InboundDataListener(sip));
+            PortBase.getProtocolHandlerStore(this.protocol(), agtId).rent();
+        sip.initInbound(clientRd, agtId, tp, this, protoHnd);
+        tp.init()
+
+        let st = new RudderState(clientRd, tp)
+        agt.netMultiplexer.addRudderState(clientRd, st)
+        agt.netMultiplexer.reqRead(clientRd)
         return tp;
     }
 
-    returnProtocolHandler(agt: GrandAgent, protoHnd: ProtocolHandler<any, any>) {
+    returnProtocolHandler(agtId: number, protoHnd: ProtocolHandler<any, any>) {
         BayLog.debug("%s Return protocol handler: ", protoHnd);
-        PortBase.getProtocolHandlerStore(protoHnd.protocol(), agt).Return(protoHnd);
+        PortBase.getProtocolHandlerStore(protoHnd.protocol(), agtId).Return(protoHnd);
     }
 
     returnShip(sip: InboundShip) {
         BayLog.debug("%s Return ship: ", sip);
-        PortBase.getShipStore(sip.agent).Return(sip);
+        PortBase.getShipStore(sip.agentId).Return(sip);
     }
 
     createServer(): net.Server {
@@ -270,11 +293,11 @@ export abstract class PortBase extends DockerBase implements Port, Docker {
     //////////////////////////////////////////////////////
     // class methods
     //////////////////////////////////////////////////////
-    static getShipStore(agt: GrandAgent) {
-        return InboundShipStore.getStore(agt.agentId);
+    static getShipStore(agtId: number) {
+        return InboundShipStore.getStore(agtId);
     }
 
-    static getProtocolHandlerStore(protocol: string, agt: GrandAgent): ProtocolHandlerStore<any, any> {
-        return ProtocolHandlerStore.getStore(protocol, true, agt.agentId);
+    static getProtocolHandlerStore(protocol: string, agtId: number): ProtocolHandlerStore<any, any> {
+        return ProtocolHandlerStore.getStore(protocol, true, agtId);
     }
 }

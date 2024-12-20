@@ -1,23 +1,26 @@
-import {WarpDocker} from "bayserver-core/baykit/bayserver/docker/warp/warpDocker";
 import {GrandAgent} from "bayserver-core/baykit/bayserver/agent/grandAgent";
-import {Transporter} from "bayserver-core/baykit/bayserver/agent/transporter/transporter";
 import {Docker} from "bayserver-core/baykit/bayserver/docker/docker";
 import {BcfElement} from "bayserver-core/baykit/bayserver/bcf/bcfElement";
 import {BcfKeyVal} from "bayserver-core/baykit/bayserver/bcf/bcfKeyVal";
 import {StrUtil} from "bayserver-core/baykit/bayserver/util/strUtil";
 import {HtpDockerConst} from "./htpDockerConst";
-import {SecureTransporter} from "bayserver-core/baykit/bayserver/agent/transporter/secureTransporter";
 import {IOUtil} from "bayserver-core/baykit/bayserver/util/ioUtil";
-import {PlainTransporter} from "bayserver-core/baykit/bayserver/agent/transporter/plainTransporter";
+import {PlainTransporter} from "bayserver-core/baykit/bayserver/agent/multiplexer/plainTransporter";
 import {PacketStore} from "bayserver-core/baykit/bayserver/protocol/packetStore";
 import {H1PacketFactory} from "./h1/h1PacketFactory";
 import {H2PacketFactory} from "./h2/h2PacketFactory";
 import {ProtocolHandlerStore} from "bayserver-core/baykit/bayserver/protocol/protocolHandlerStore";
 import {H1WarpHandler_ProtocolHandlerFactory} from "./h1/h1WarpHandler";
-import {ChannelWrapper} from "bayserver-core/baykit/bayserver/agent/channelWrapper";
+import {Rudder} from "bayserver-core/baykit/bayserver/rudder/rudder";
+import {Ship} from "bayserver-core/baykit/bayserver/ship/ship";
+import {Transporter} from "bayserver-core/baykit/bayserver/agent/multiplexer/transporter";
+import {SocketRudder} from "bayserver-core/baykit/bayserver/rudder/socketRudder";
+import {Socket} from "net";
+import {Sink} from "bayserver-core/baykit/bayserver/sink";
+import {WarpBase} from "bayserver-core/baykit/bayserver/docker/base/warpBase";
 
 
-export class HtpWarpDocker extends WarpDocker {
+export class HtpWarpDocker extends WarpBase {
 
     static readonly DEFAULT_SSL_PROTOCOL: string = "TLS";
 
@@ -66,7 +69,7 @@ export class HtpWarpDocker extends WarpDocker {
     }
 
     //////////////////////////////////////////////////////
-    // Implements WarpDocker
+    // Implements WarpBase
     //////////////////////////////////////////////////////
     isSecure(): boolean {
         return this.secure;
@@ -80,12 +83,18 @@ export class HtpWarpDocker extends WarpDocker {
         return HtpDockerConst.H1_PROTO_NAME;
     }
 
-    newTransporter(agt: GrandAgent, ch: ChannelWrapper): Transporter {
+    newTransporter(agt: GrandAgent, rd: Rudder, sip: Ship): Transporter {
         if(this.secure) {
-            return new SecureTransporter(this.sslCtx, false, true);
+            throw new Sink()
         }
-        else
-            return new PlainTransporter(false, IOUtil.getSockRecvBufSize(ch.socket));
+        else {
+            return new PlainTransporter(
+                agt.netMultiplexer,
+                sip,
+                false,
+                IOUtil.getSockRecvBufSize((rd as SocketRudder).readable as Socket),
+                false)
+        }
     }
 }
 

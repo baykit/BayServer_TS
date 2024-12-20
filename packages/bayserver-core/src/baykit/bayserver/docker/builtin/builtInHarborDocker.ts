@@ -1,4 +1,11 @@
-import {FILE_SEND_METHOD_SELECT, FILE_SEND_METHOD_TAXI, Harbor} from "../harbor";
+import {
+    getMultiplexerType, getMultiplexerTypeName, getRecipientType,
+    Harbor,
+    MULTIPLEXER_TYPE_PIGEON,
+    MULTIPLEXER_TYPE_VALVE,
+    MultiplexerType, RECIPIENT_TYPE_EVENT, RECIPIENT_TYPE_PIPE,
+    RecipientType
+} from "../harbor";
 import {DockerBase} from "../base/dockerBase";
 import {Locale} from "../../util/locale";
 import {Trouble} from "../trouble";
@@ -24,14 +31,23 @@ export class BuiltInHarborDocker extends DockerBase implements Harbor {
     static readonly DEFAULT_TOUR_BUFFER_SIZE: number = 1024 * 1024;  // 1M
     static readonly DEFAULT_CHARSET: string = "UTF-8";
     static readonly DEFAULT_CONTROL_PORT: number = -1;
-    static readonly DEFAULT_SEND_FILE_METHOD: number = FILE_SEND_METHOD_TAXI;
+    static readonly DEFAULT_NET_MULTIPLEXER: number = MULTIPLEXER_TYPE_VALVE;
+    static readonly DEFAULT_FILE_MULTIPLEXER: number = MULTIPLEXER_TYPE_PIGEON;
+    static readonly DEFAULT_LOG_MULTIPLEXER: number = MULTIPLEXER_TYPE_PIGEON;
+    static readonly DEFAULT_CGI_MULTIPLEXER: number = MULTIPLEXER_TYPE_VALVE;
+    static readonly DEFAULT_RECIPIENT: number = RECIPIENT_TYPE_EVENT;
+
     static readonly DEFAULT_MULTI_CORE: boolean = true;
     static readonly DEFAULT_GZIP_COMP: boolean = false;
     static readonly DEFAULT_PID_FILE: string = "bayserver.pid";
 
     charset: string = BuiltInHarborDocker.DEFAULT_CHARSET;
     controlPort: number = BuiltInHarborDocker.DEFAULT_CONTROL_PORT;
-    fileSendMethod: number = BuiltInHarborDocker.DEFAULT_SEND_FILE_METHOD;
+    netMultiplexer: MultiplexerType = BuiltInHarborDocker.DEFAULT_NET_MULTIPLEXER
+    fileMultiplexer: MultiplexerType = BuiltInHarborDocker.DEFAULT_FILE_MULTIPLEXER
+    logMultiplexer: MultiplexerType = BuiltInHarborDocker.DEFAULT_LOG_MULTIPLEXER
+    cgiMultiplexer: MultiplexerType = BuiltInHarborDocker.DEFAULT_CGI_MULTIPLEXER
+    recipient: RecipientType = BuiltInHarborDocker.DEFAULT_RECIPIENT
     gzipComp: boolean = BuiltInHarborDocker.DEFAULT_GZIP_COMP;
     keepTimeoutSec: number = BuiltInHarborDocker.DEFAULT_KEEP_TIMEOUT_SEC;
     locale: Locale;
@@ -65,6 +81,42 @@ export class BuiltInHarborDocker extends DockerBase implements Harbor {
         if (!this.multiCore) {
             BayLog.warn(BayMessage.get(Symbol.CFG_SINGLE_CORE_NOT_SUPPORTED));
             this.multiCore = true
+        }
+
+        if (this.netMultiplexer != MULTIPLEXER_TYPE_VALVE) {
+            BayLog.warn(
+                BayMessage.get(
+                    Symbol.CFG_NET_MULTIPLEXER_NOT_SUPPORTED,
+                    getMultiplexerTypeName(this.netMultiplexer),
+                    getMultiplexerTypeName(BuiltInHarborDocker.DEFAULT_NET_MULTIPLEXER)));
+            this.netMultiplexer = BuiltInHarborDocker.DEFAULT_NET_MULTIPLEXER;
+        }
+
+        if (this.fileMultiplexer != MULTIPLEXER_TYPE_PIGEON) {
+            BayLog.warn(
+                BayMessage.get(
+                    Symbol.CFG_FILE_MULTIPLEXER_NOT_SUPPORTED,
+                    getMultiplexerTypeName(this.fileMultiplexer),
+                    getMultiplexerTypeName(BuiltInHarborDocker.DEFAULT_FILE_MULTIPLEXER)));
+            this.fileMultiplexer = BuiltInHarborDocker.DEFAULT_FILE_MULTIPLEXER;
+        }
+
+        if (this.logMultiplexer != MULTIPLEXER_TYPE_PIGEON) {
+            BayLog.warn(
+                BayMessage.get(
+                    Symbol.CFG_LOG_MULTIPLEXER_NOT_SUPPORTED,
+                    getMultiplexerTypeName(this.logMultiplexer),
+                    getMultiplexerTypeName(BuiltInHarborDocker.DEFAULT_LOG_MULTIPLEXER)));
+            this.logMultiplexer = BuiltInHarborDocker.DEFAULT_LOG_MULTIPLEXER;
+        }
+
+        if (this.cgiMultiplexer != MULTIPLEXER_TYPE_VALVE) {
+            BayLog.warn(
+                BayMessage.get(
+                    Symbol.CFG_CGI_MULTIPLEXER_NOT_SUPPORTED,
+                    getMultiplexerTypeName(this.cgiMultiplexer),
+                    getMultiplexerTypeName(BuiltInHarborDocker.DEFAULT_CGI_MULTIPLEXER)))
+            this.cgiMultiplexer = BuiltInHarborDocker.DEFAULT_CGI_MULTIPLEXER
         }
     }
 
@@ -166,7 +218,54 @@ export class BuiltInHarborDocker extends DockerBase implements Harbor {
                 this.gzipComp = StrUtil.parseBool(kv.value);
                 break;
 
-            case "sendfilemethod":
+            case "netmultiplexer":
+                try {
+                    this.netMultiplexer = getMultiplexerType(kv.value.toLowerCase())
+                }
+                catch(e) {
+                    BayLog.error_e(e)
+                    throw new ConfigException(kv.fileName, kv.lineNo, BayMessage.get(Symbol.CFG_INVALID_PARAMETER_VALUE, kv.value))
+                }
+                break;
+
+            case "filemultiplexer":
+                try {
+                    this.fileMultiplexer = getMultiplexerType(kv.value.toLowerCase())
+                }
+                catch(e) {
+                    BayLog.error_e(e)
+                    throw new ConfigException(kv.fileName, kv.lineNo, BayMessage.get(Symbol.CFG_INVALID_PARAMETER_VALUE, kv.value))
+                }
+                break;
+
+            case "logmultiplexer":
+                try {
+                    this.logMultiplexer = getMultiplexerType(kv.value.toLowerCase())
+                }
+                catch(e) {
+                    BayLog.error_e(e)
+                    throw new ConfigException(kv.fileName, kv.lineNo, BayMessage.get(Symbol.CFG_INVALID_PARAMETER_VALUE, kv.value))
+                }
+                break;
+
+            case "cgimultiplexer":
+                try {
+                    this.cgiMultiplexer = getMultiplexerType(kv.value.toLowerCase())
+                }
+                catch(e) {
+                    BayLog.error_e(e)
+                    throw new ConfigException(kv.fileName, kv.lineNo, BayMessage.get(Symbol.CFG_INVALID_PARAMETER_VALUE, kv.value))
+                }
+                break;
+
+            case "recipient":
+                try {
+                    this.recipient = getRecipientType(kv.value.toLowerCase())
+                }
+                catch(e) {
+                    BayLog.error_e(e)
+                    throw new ConfigException(kv.fileName, kv.lineNo, BayMessage.get(Symbol.CFG_INVALID_PARAMETER_VALUE, kv.value))
+                }
                 break;
 
             case "pidfile":
@@ -192,8 +291,29 @@ export class BuiltInHarborDocker extends DockerBase implements Harbor {
         return this.controlPort;
     }
 
-    getFileSendMethod(): number {
-        return this.fileSendMethod;
+    /** Multiplexer of Network I/O */
+    getNetMultiplexer(): MultiplexerType {
+        return this.netMultiplexer
+    }
+
+    /** Multiplexer of File I/O */
+    getFileMultiplexer(): MultiplexerType {
+        return this.fileMultiplexer
+    }
+
+    /** Multiplexer of Log output */
+    getLogMultiplexer(): MultiplexerType {
+        return this.logMultiplexer
+    }
+
+    /** Multiplexer of CGI input */
+    getCgiMultiplexer(): MultiplexerType {
+        return this.cgiMultiplexer
+    }
+
+    /** Recipient */
+    getRecipient(): RecipientType {
+        return this.recipient
     }
 
     getGzipComp(): boolean {

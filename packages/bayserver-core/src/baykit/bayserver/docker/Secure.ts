@@ -1,12 +1,13 @@
-import {Transporter} from "../agent/transporter/transporter";
 import * as net from "net";
+import {Transporter} from "../agent/multiplexer/transporter";
+import {Ship} from "../ship/ship";
 
 export interface Secure {
-    setAppProtocols(protocols: string[]);
+    setAppProtocols(protocols: string[]): void;
 
-    reloadCert();
+    reloadCert(): void;
 
-    createTransporter(): Transporter;
+    newTransporter(agtId: number, ship: Ship): Transporter;
 
     createServer(): net.Server
 

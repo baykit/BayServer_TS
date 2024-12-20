@@ -17,31 +17,56 @@ import {BayServer} from "bayserver-core/baykit/bayserver/bayserver";
 import {CmdData} from "./command/cmdData";
 import {CmdGetBodyChunk} from "./command/cmdGetBodyChunk";
 import {CmdShutdown} from "./command/cmdShutdown";
-import {WarpHandler} from "bayserver-core/baykit/bayserver/docker/warp/warpHandler";
-import {WarpData} from "bayserver-core/baykit/bayserver/docker/warp/warpData";
-import {WarpShip} from "bayserver-core/baykit/bayserver/docker/warp/warpShip";
 import {Buffer} from "buffer";
+import {AjpCommandUnPacker} from "./ajpCommandUnPacker";
+import {AjpPacketUnpacker} from "./ajpPacketUnpacker";
+import {PacketPacker} from "bayserver-core/baykit/bayserver/protocol/packetPacker";
+import {CommandPacker} from "bayserver-core/baykit/bayserver/protocol/commandPacker";
+import {AjpCommandHandler} from "./ajpCommandHandler";
+import {AjpHandler} from "./ajpHandler";
+import {Sink} from "bayserver-core/baykit/bayserver/sink";
+import {WarpHandler} from "bayserver-core/baykit/bayserver/common/warpHandler";
+import {WarpData} from "bayserver-core/baykit/bayserver/common/warpData";
+import {WarpShip} from "bayserver-core/baykit/bayserver/common/warpShip";
 
 export class AjpWarpHandler_ProtocolHandlerFactory implements ProtocolHandlerFactory<AjpCommand, AjpPacket> {
 
     createProtocolHandler(pktStore: PacketStore<AjpPacket>): ProtocolHandler<AjpCommand, AjpPacket> {
-        return new AjpWarpHandler(pktStore);
+        let warpHandler = new AjpWarpHandler()
+        let commandUnpacker = new AjpCommandUnPacker(warpHandler);
+        let packetUnpacker = new AjpPacketUnpacker(pktStore, commandUnpacker);
+        let packetPacker = new PacketPacker<AjpPacket>();
+        let commandPacker = new CommandPacker<AjpCommand, AjpPacket, AjpCommandHandler>(packetPacker, pktStore);
+        let protocolHandler =
+            new AjpProtocolHandler(
+                warpHandler,
+                packetUnpacker,
+                packetPacker,
+                commandUnpacker,
+                commandPacker,
+                false);
+        warpHandler.init(protocolHandler)
+        return protocolHandler
     }
 }
 
-export class AjpWarpHandler extends AjpProtocolHandler implements WarpHandler {
+export class AjpWarpHandler implements WarpHandler, AjpHandler {
 
     FIXED_WARP_ID: number = 1;
 
     STATE_READ_HEADER: number = 1
     STATE_READ_CONTENT: number = 2
 
+    protocolHandler: AjpProtocolHandler
     state: number
     contReadLen: number
 
-    constructor(pktStore: PacketStore<AjpPacket>) {
-        super(pktStore, false);
+    constructor() {
         this.resetState()
+    }
+
+    init(protoHandler: AjpProtocolHandler): void {
+        this.protocolHandler = protoHandler
     }
 
     //////////////////////////////////////////////////////////////////
@@ -49,10 +74,30 @@ export class AjpWarpHandler extends AjpProtocolHandler implements WarpHandler {
     //////////////////////////////////////////////////////////////////
 
     reset() : void {
-        super.reset();
         this.resetState();
         this.contReadLen = 0;
     }
+
+    //////////////////////////////////////////////////////////////////
+    // Implements TourHandler
+    //////////////////////////////////////////////////////////////////
+
+    sendReqHeaders(tur: Tour): void {
+        this.sendForwardRequest(tur)
+    }
+
+    sendReqContent(tur: Tour, buf: Buffer, start: number, len: number, lis: DataConsumeListener): void {
+        this.sendData(tur, buf, start, len, lis);
+    }
+
+    sendEndReq(tur: Tour, keepAlive: boolean, lis: DataConsumeListener): void {
+        this.ship().post(null, lis);
+    }
+
+    onProtocolError(e: ProtocolException): boolean {
+        throw new Sink()
+    }
+
 
     //////////////////////////////////////////////////////////////////
     // Implements WarpHandler
@@ -63,23 +108,7 @@ export class AjpWarpHandler extends AjpProtocolHandler implements WarpHandler {
     }
 
     newWarpData(warpId: number): WarpData {
-        return new WarpData(this.ship as WarpShip, warpId);
-    }
-
-    postWarpHeaders(tur: Tour): void {
-        this.sendForwardRequest(tur)
-    }
-
-    postWarpContents(tur: Tour, buf: Buffer, start: number, len: number, lis: DataConsumeListener): void {
-        this.sendData(tur, buf, start, len, lis);
-    }
-
-    postWarpEnd(tur: Tour): void {
-        let callback = () => {
-            this.ship.agent.nonBlockingHandler.askToRead(this.ship.ch)
-        }
-        let wsip = this.ship as WarpShip
-        wsip.post(null, callback);
+        return new WarpData(this.ship() as WarpShip, warpId);
     }
 
     verifyProtocol(protocol: string): void {
@@ -100,7 +129,7 @@ export class AjpWarpHandler extends AjpProtocolHandler implements WarpHandler {
 
     handleEndResponse(cmd: CmdEndResponse): number {
         BayLog.debug("%s handleEndResponse reuse=%b", this, cmd.reuse);
-        let wsip = this.ship as WarpShip
+        let wsip = this.ship()
         let tur = wsip.getTour(this.FIXED_WARP_ID);
 
         if (this.state == this.STATE_READ_HEADER)
@@ -109,13 +138,14 @@ export class AjpWarpHandler extends AjpProtocolHandler implements WarpHandler {
         this.endResContent(tur);
         if(cmd.reuse)
             return NextSocketAction.CONTINUE;
-        else
+        else {
             return NextSocketAction.CLOSE;
+        }
     }
 
     handleSendBodyChunk(cmd: CmdSendBodyChunk): number {
         BayLog.debug(this + " handleBodyChunk");
-        let wsip = this.ship as WarpShip
+        let wsip = this.ship()
         let tur = wsip.getTour(this.FIXED_WARP_ID);
 
         if (this.state == this.STATE_READ_HEADER) {
@@ -123,14 +153,14 @@ export class AjpWarpHandler extends AjpProtocolHandler implements WarpHandler {
             let sid = wsip.id();
             tur.res.setConsumeListener((len, resume) => {
                 if(resume) {
-                    wsip.resume(sid);
+                    wsip.resumeRead(sid);
                 }
             });
 
             this.endResHeader(tur);
         }
 
-        let available = tur.res.sendContent(tur.tourId, cmd.chunk, 0, cmd.length);
+        let available = tur.res.sendResContent(tur.tourId, cmd.chunk, 0, cmd.length);
         this.contReadLen += cmd.length;
         if(available)
             return NextSocketAction.CONTINUE;
@@ -141,7 +171,7 @@ export class AjpWarpHandler extends AjpProtocolHandler implements WarpHandler {
     handleSendHeaders(cmd: CmdSendHeaders): number {
         BayLog.debug(this + " handleSendHeaders");
 
-        let tur = (this.ship as WarpShip).getTour(this.FIXED_WARP_ID);
+        let tur = this.ship().getTour(this.FIXED_WARP_ID);
 
         if (this.state != this.STATE_READ_HEADER)
             throw new ProtocolException("Invalid AJP command: " + cmd.type + " state=" + this.state);
@@ -187,8 +217,8 @@ export class AjpWarpHandler extends AjpProtocolHandler implements WarpHandler {
     }
 
     private endResContent(tur: Tour) : void {
-        (this.ship as WarpShip).endWarpTour(tur);
-        tur.res.endContent(Tour.TOUR_ID_NOCHECK);
+        this.ship().endWarpTour(tur);
+        tur.res.endResContent(Tour.TOUR_ID_NOCHECK);
         this.resetState();
     }
 
@@ -202,7 +232,7 @@ export class AjpWarpHandler extends AjpProtocolHandler implements WarpHandler {
 
     private sendForwardRequest(tur: Tour) : void {
         BayLog.debug(tur + " construct header");
-        let wsip = this.ship as WarpShip;
+        let wsip = this.ship()
 
         let cmd = new CmdForwardRequest();
         cmd.toServer = true;
@@ -245,7 +275,7 @@ export class AjpWarpHandler extends AjpProtocolHandler implements WarpHandler {
 
     private sendData(tur: Tour, data: Buffer, ofs: number, len: number, lis: DataConsumeListener) : void {
         BayLog.debug("%s construct contents", tur);
-        let wsip = this.ship as WarpShip
+        let wsip = this.ship()
 
         let newBuf = Buffer.alloc(len)
         data.copy(newBuf, 0, ofs, ofs + len)
@@ -253,6 +283,11 @@ export class AjpWarpHandler extends AjpProtocolHandler implements WarpHandler {
         cmd.toServer = true;
         wsip.post(cmd, lis);
     }
+
+    ship(): WarpShip {
+        return this.protocolHandler.ship as WarpShip
+    }
+
 }
 
 

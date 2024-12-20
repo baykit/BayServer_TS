@@ -1,4 +1,4 @@
-import {InboundShipStore} from "./docker/base/inboundShipStore";
+import {InboundShipStore} from "./common/inboundShipStore";
 import {ProtocolHandlerStore} from "./protocol/protocolHandlerStore";
 import {PacketStore} from "./protocol/packetStore";
 import {TourStore} from "./tour/tourStore";
@@ -65,18 +65,18 @@ export class MemUsage {
         let pname = port == null ? "" : "@" + port;
         for(const club of city.getClubs()) {
             /*
-            if (club instanceof WarpDocker) {
+            if (club instanceof WarpBase) {
                 BayLog.info("%sClub(%s%s) Usage:", StrUtil.indent(indent), club, pname);
-                (club as WarpDocker).getShipStore(this.agentId).printUsage(indent+1);
+                (club as WarpBase).getShipStore(this.agentId).printUsage(indent+1);
             }
              */
         }
         for(const town of city.getTowns()) {
             for (const club of town.getClubs()) {
                 /*
-                if (club instanceof WarpDocker) {
+                if (club instanceof WarpBase) {
                     BayLog.info("%sClub(%s%s) Usage:", StrUtil.indent(indent), club, pname);
-                    (club as WarpDocker).getShipStore(this.agentId).printUsage(indent + 1);
+                    (club as WarpBase).getShipStore(this.agentId).printUsage(indent + 1);
                 }
 
                  */

@@ -1,38 +1,31 @@
 import {ProtocolHandler} from "bayserver-core/baykit/bayserver/protocol/protocolHandler";
 import {H1Command} from "./h1Command";
 import {H1Packet} from "./h1Packet";
-import {H1CommandHandler} from "./h1CommandHandler";
-import {PacketStore} from "bayserver-core/baykit/bayserver/protocol/packetStore";
 import {PacketPacker} from "bayserver-core/baykit/bayserver/protocol/packetPacker";
 import {CommandPacker} from "bayserver-core/baykit/bayserver/protocol/commandPacker";
 import {HtpDockerConst} from "../htpDockerConst";
-import {H1CommandUnPacker} from "./h1CommandUnPacker";
-import {H1PacketUnpacker} from "./h1PacketUnPacker";
-import {CmdContent} from "./command/cmdContent";
-import {CmdEndContent} from "./command/cmdEndContent";
-import {CmdHeader} from "./command/cmdHeader";
+import {H1Handler} from "./h1Handler";
+import {PacketUnpacker} from "bayserver-core/baykit/bayserver/protocol/packetUnpacker";
+import {CommandUnPacker} from "bayserver-core/baykit/bayserver/protocol/commandUnpacker";
+import {Ship} from "bayserver-core/baykit/bayserver/ship/ship";
 
-export abstract class H1ProtocolHandler extends ProtocolHandler<H1Command, H1Packet> implements H1CommandHandler{
+export class H1ProtocolHandler extends ProtocolHandler<H1Command, H1Packet> {
 
     keeping: boolean;
 
-    protected constructor(
-        pktStore: PacketStore<H1Packet>,
-        svrMode: boolean) {
-        super();
-        this.commandUnpacker = new H1CommandUnPacker(this, svrMode);
-        this.packetUnpacker = new H1PacketUnpacker(this.commandUnpacker as H1CommandUnPacker, pktStore);
-        this.packetPacker = new PacketPacker();
-        this.commandPacker = new CommandPacker(this.packetPacker, pktStore);
-        this.serverMode = svrMode;
+    public constructor(
+        h1Handler: H1Handler,
+        packetUnpacker: PacketUnpacker<H1Packet>,
+        packetPacker: PacketPacker<H1Packet>,
+        commandUnpacker: CommandUnPacker<H1Packet>,
+        commandPacker: CommandPacker<H1Command, H1Packet, any>,
+        servsvrMode: boolean) {
+        super(packetUnpacker, packetPacker, commandUnpacker, commandPacker, h1Handler, servsvrMode);
     }
 
-
-    abstract handleContent(cmd: CmdContent): number;
-    abstract handleEndContent(cmdEndContent: CmdEndContent): number;
-    abstract handleHeader(cmd: CmdHeader): number;
-    abstract reqFinished(): boolean;
-
+    init(ship: Ship): void {
+        super.init(ship)
+    }
 
     //////////////////////////////////////////////////////
     // Implements Reusable

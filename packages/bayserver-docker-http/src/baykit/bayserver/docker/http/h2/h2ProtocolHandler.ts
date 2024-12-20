@@ -1,7 +1,6 @@
 import {ProtocolHandler} from "bayserver-core/baykit/bayserver/protocol/protocolHandler";
 import {H2Packet} from "./h2Packet";
 import {H2Command} from "./h2Command";
-import {H2CommandHandler} from "./h2CommandHandler";
 import {CmdData} from "./command/cmdData";
 import {CmdGoAway} from "./command/cmdGoAway";
 import {CmdHeaders} from "./command/cmdHeaders";
@@ -12,35 +11,27 @@ import {CmdRstStream} from "./command/cmdRstStream";
 import {CmdSettings} from "./command/cmdSettings";
 import {CmdWindowUpdate} from "./command/cmdWindowUpdate";
 import {HeaderTable} from "./headerTable";
-import {PacketStore} from "bayserver-core/baykit/bayserver/protocol/packetStore";
-import {H2CommandUnPacker} from "./h2CommandUnPacker";
-import {H2PacketUnPacker} from "./h2PacketUnPacker";
 import {PacketPacker} from "bayserver-core/baykit/bayserver/protocol/packetPacker";
 import {CommandPacker} from "bayserver-core/baykit/bayserver/protocol/commandPacker";
+import {H2Handler} from "./h2Handler";
+import {PacketUnpacker} from "bayserver-core/baykit/bayserver/protocol/packetUnpacker";
+import {CommandUnPacker} from "bayserver-core/baykit/bayserver/protocol/commandUnpacker";
 
-export abstract class H2ProtocolHandler extends ProtocolHandler<H2Command, H2Packet> implements H2CommandHandler {
-    abstract handleData(cmd: CmdData): number
-    abstract handleGoAway(cmd: CmdGoAway): number
-    abstract handleHeaders(cmd: CmdHeaders): number
-    abstract handlePing(cmd: CmdPing): number
-    abstract handlePreface(cmd: CmdPreface): number
-    abstract handlePriority(cmd: CmdPriority): number
-    abstract handleRstStream(cmd: CmdRstStream): number
-    abstract handleSettings(cmd: CmdSettings): number
-    abstract handleWindowUpdate(cmd: CmdWindowUpdate): number
+export class H2ProtocolHandler extends ProtocolHandler<H2Command, H2Packet>{
 
     static readonly CTL_STREAM_ID = 0
 
     reqHeaderTbl = HeaderTable.createDynamicTable()
     resHeaderTbl = HeaderTable.createDynamicTable()
 
-    constructor(pktStore: PacketStore<H2Packet>, svrMode: boolean) {
-        super();
-        this.commandUnpacker = new H2CommandUnPacker(this)
-        this.packetUnpacker = new H2PacketUnPacker(this.commandUnpacker as H2CommandUnPacker, pktStore, svrMode)
-        this.packetPacker = new PacketPacker<H2Packet>()
-        this.commandPacker = new CommandPacker<H2Command, H2Packet, any>(this.packetPacker, pktStore)
-        this.serverMode = svrMode
+    constructor(
+        h2Handler: H2Handler,
+        packetUnpacker: PacketUnpacker<H2Packet>,
+        packetPacker: PacketPacker<H2Packet>,
+        commandUnpacker: CommandUnPacker<H2Packet>,
+        commandPacker: CommandPacker<H2Command, H2Packet, any>,
+        serverMode: boolean) {
+        super(packetUnpacker, packetPacker, commandUnpacker, commandPacker, h2Handler, serverMode);
     }
 
 

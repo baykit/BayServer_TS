@@ -1,25 +1,26 @@
 import {Tour} from "./tour";
 import {Buffer} from "buffer";
+import {ContentConsumeListener} from "./contentConsumeListener";
 
 export interface ReqContentHandler {
 
-    onReadContent(tur: Tour, buf: Buffer, start: number, len: number) : void;
+    onReadReqContent(tur: Tour, buf: Buffer, start: number, len: number, lis: ContentConsumeListener) : void;
 
-    onEndContent(tur: Tour) : void;
+    onEndReqContent(tur: Tour) : void;
 
-    onAbort(tur: Tour) : boolean;
+    onAbortReq(tur: Tour) : boolean;
     
 }
 
 class DevNull implements ReqContentHandler{
-    onAbort(tur: Tour): boolean {
+    onAbortReq(tur: Tour): boolean {
         return false;
     }
 
-    onEndContent(tur: Tour): void {
+    onEndReqContent(tur: Tour): void {
     }
 
-    onReadContent(tur: Tour, buf: Buffer, start: number, len: number): void {
+    onReadReqContent(tur: Tour, buf: Buffer, start: number, len: number): void {
     }
 }
 

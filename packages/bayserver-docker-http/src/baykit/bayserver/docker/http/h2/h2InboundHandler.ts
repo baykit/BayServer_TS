@@ -9,7 +9,6 @@ import {CmdData} from "./command/cmdData";
 import {BayServer} from "bayserver-core/baykit/bayserver/bayserver";
 import {HeaderBlockAnalyzer} from "./headerBlockAnalyzer";
 import {H2Settings} from "./h2Settings";
-import {InboundShip} from "bayserver-core/baykit/bayserver/docker/base/inboundShip";
 import {Tour} from "bayserver-core/baykit/bayserver/tour/tour";
 import {CmdHeaders} from "./command/cmdHeaders";
 import {HeaderBlockBuilder} from "./headerBlockBuilder";
@@ -28,27 +27,51 @@ import {Symbol} from "bayserver-core/baykit/bayserver/symbol";
 import {HttpStatus} from "bayserver-core/baykit/bayserver/util/httpStatus";
 import {HeaderBlock} from "./headerBlock";
 import {CmdWindowUpdate} from "./command/cmdWindowUpdate";
-import {Ship} from "bayserver-core/baykit/bayserver/watercraft/ship";
 import {ReqContentHandlerUtil} from "bayserver-core/baykit/bayserver/tour/reqContentHandler";
 import {CmdPriority} from "./command/cmdPriority";
 import {H2Flags} from "./h2Flags";
 import {CmdPing} from "./command/cmdPing";
 import {CmdRstStream} from "./command/cmdRstStream";
 import {HttpUtil} from "bayserver-core/baykit/bayserver/util/httpUtil";
-import * as net from "net";
-import {TourReq} from "bayserver-core/baykit/bayserver/tour/tourReq";
+import {SocketRudder} from "bayserver-core/baykit/bayserver/rudder/socketRudder";
+import {PacketUnpacker} from "bayserver-core/baykit/bayserver/protocol/packetUnpacker";
+import {PacketPacker} from "bayserver-core/baykit/bayserver/protocol/packetPacker";
+import {CommandPacker} from "bayserver-core/baykit/bayserver/protocol/commandPacker";
+import {H2CommandUnPacker} from "./h2CommandUnPacker";
+import {H2PacketUnPacker} from "./h2PacketUnPacker";
+import {H2Handler} from "./h2Handler";
+import {InboundShip} from "bayserver-core/baykit/bayserver/common/inboundShip";
+import {Ship} from "bayserver-core/baykit/bayserver/ship/ship";
+
+
 
 export class H2InboundProtocolHandlerFactory implements ProtocolHandlerFactory<H2Command, H2Packet> {
 
     createProtocolHandler(pktStore: PacketStore<H2Packet>): ProtocolHandler<H2Command, H2Packet> {
-        return new H2InboundHandler(pktStore);
+        let inboundHandler = new H2InboundHandler()
+        let commandUnpacker = new H2CommandUnPacker(inboundHandler)
+        let packetUnpacker: PacketUnpacker<H2Packet> = new H2PacketUnPacker(commandUnpacker, pktStore, true)
+        let packetPacker: PacketPacker<H2Packet> = new PacketPacker<H2Packet>()
+        let commandPacker: CommandPacker<H2Command, H2Packet, any> = new CommandPacker(packetPacker, pktStore)
+        let protocolHandler =
+            new H2ProtocolHandler(
+                inboundHandler,
+                packetUnpacker,
+                packetPacker,
+                commandUnpacker,
+                commandPacker,
+                true
+            )
+        inboundHandler.init(protocolHandler)
+        return protocolHandler;
     }
 }
 
 
 
-export class H2InboundHandler extends H2ProtocolHandler implements InboundHandler {
+export class H2InboundHandler implements H2Handler, InboundHandler {
 
+    protocolHandler: H2ProtocolHandler
     headerRead: boolean
     httpProtocol: string
 
@@ -58,19 +81,17 @@ export class H2InboundHandler extends H2ProtocolHandler implements InboundHandle
     readonly settings = new H2Settings()
     readonly analyzer = new HeaderBlockAnalyzer()
 
-    constructor(pktStore: PacketStore<H2Packet>) {
-        super(pktStore, true);
+    constructor() {
     }
 
-    inboundShip(): InboundShip {
-        return this.ship as InboundShip
+    init(ph: H2ProtocolHandler) {
+        this.protocolHandler = ph
     }
 
     //////////////////////////////////////////////////////
     // Implements Reusable
     //////////////////////////////////////////////////////
     reset() {
-        super.reset();
         this.headerRead = false;
 
         this.reqContLen = 0;
@@ -87,7 +108,7 @@ export class H2InboundHandler extends H2ProtocolHandler implements InboundHandle
 
         let bld = new HeaderBlockBuilder();
 
-        let blk = bld.buildHeaderBlock(":status", tur.res.headers.status.toString(), this.resHeaderTbl);
+        let blk = bld.buildHeaderBlock(":status", tur.res.headers.status.toString(), this.protocolHandler.resHeaderTbl);
         cmd.headerBlocks.push(blk);
 
         // headers
@@ -101,7 +122,7 @@ export class H2InboundHandler extends H2ProtocolHandler implements InboundHandle
                 for(const value of tur.res.headers.values(name)) {
                     if (BayServer.harbor.isTraceHeader())
                         BayLog.info("%s H2 res header: %s=%s", tur, name, value);
-                    blk = bld.buildHeaderBlock(name, value, this.resHeaderTbl);
+                    blk = bld.buildHeaderBlock(name, value, this.protocolHandler.resHeaderTbl);
                     cmd.headerBlocks.push(blk);
                 }
             }
@@ -112,30 +133,30 @@ export class H2InboundHandler extends H2ProtocolHandler implements InboundHandle
         // cmd.streamDependency = streamId;
         cmd.flags.setPadded(false);
 
-        this.commandPacker.post(this.ship, cmd);
+        this.protocolHandler.post(cmd);
     }
 
     sendResContent(tur: Tour, bytes: Buffer, ofs: number, len: number, lis: DataConsumeListener) {
         let cmd = new CmdData(tur.req.key, null, bytes, ofs, len);
-        this.commandPacker.post(this.ship, cmd, lis);
+        this.protocolHandler.post(cmd, lis);
     }
 
     sendEndTour(tur: Tour, keepAlive: boolean, lis: DataConsumeListener) {
         let cmd = new CmdData(tur.req.key, null);
         cmd.flags.setEndStream(true);
-        this.commandPacker.post(this.ship, cmd, lis);
+        this.protocolHandler.post(cmd, lis);
     }
 
-    sendReqProtocolError(e: ProtocolException): boolean {
+    onProtocolError(e: ProtocolException): boolean {
         BayLog.error_e(e);
-        let cmd = new CmdGoAway(H2InboundHandler.CTL_STREAM_ID);
+        let cmd = new CmdGoAway(H2ProtocolHandler.CTL_STREAM_ID);
         cmd.streamId = 0;
         cmd.lastStreamId = 0;
         cmd.errorCode = H2ErrorCode.PROTOCOL_ERROR;
         cmd.debugData = Buffer.from("Thank you!");
         try {
-            this.commandPacker.post(this.ship, cmd);
-            this.commandPacker.end(this.ship);
+            this.protocolHandler.post(cmd);
+            this.protocolHandler.ship.postClose();
         }
         catch(ex) {
             BayLog.error_e(ex);
@@ -149,7 +170,7 @@ export class H2InboundHandler extends H2ProtocolHandler implements InboundHandle
     //////////////////////////////////////////////////////
 
     handlePreface(cmd: CmdPreface): number {
-        let sip = this.inboundShip()
+        let sip = this.ship()
         BayLog.debug("%s h2: handle_preface: proto=%s", sip, cmd.protocol);
 
         this.httpProtocol = cmd.protocol;
@@ -158,7 +179,7 @@ export class H2InboundHandler extends H2ProtocolHandler implements InboundHandle
         set.streamId = 0;
         set.items.push(new CmdSettingsItem(CmdSettings.MAX_CONCURRENT_STREAMS, TourStore.MAX_TOURS));
         set.items.push(new CmdSettingsItem(CmdSettings.INITIAL_WINDOW_SIZE, this.windowSize));
-        this.commandPacker.post(sip, set);
+        this.protocolHandler.post(set);
 
         set = new CmdSettings(H2ProtocolHandler.CTL_STREAM_ID);
         set.streamId = 0;
@@ -169,7 +190,7 @@ export class H2InboundHandler extends H2ProtocolHandler implements InboundHandle
     }
 
     handleHeaders(cmd: CmdHeaders): number {
-        let sip = this.inboundShip()
+        let sip = this.ship()
 
         BayLog.debug("%s handle_headers: stm=%d dep=%d weight=%d", sip, cmd.streamId, cmd.streamDependency, cmd.weight);
         let tur = this.getTour(cmd.streamId);
@@ -184,10 +205,10 @@ export class H2InboundHandler extends H2ProtocolHandler implements InboundHandle
         for(const blk of cmd.headerBlocks) {
             if(blk.op == HeaderBlock.UPDATE_DYNAMIC_TABLE_SIZE) {
                 BayLog.trace("%s header block update table size: %d", tur, blk.size);
-                this.reqHeaderTbl.setSize(blk.size);
+                this.protocolHandler.reqHeaderTbl.setSize(blk.size);
                 continue;
             }
-            this.analyzer.analyzeHeaderBlock(blk, this.reqHeaderTbl);
+            this.analyzer.analyzeHeaderBlock(blk, this.protocolHandler.reqHeaderTbl);
             if(BayServer.harbor.isTraceHeader())
                 BayLog.info("%s req header: %s=%s :%s", tur, this.analyzer.name, this.analyzer.value, blk);
 
@@ -218,29 +239,7 @@ export class H2InboundHandler extends H2ProtocolHandler implements InboundHandle
             let reqContLen = tur.req.headers.contentLength();
 
             if(reqContLen > 0) {
-                let sid = sip.shipId;
-
-                tur.req.setConsumeListener(reqContLen, (len, resume) => {
-                    sip.checkShipId(sid);
-
-                    if (len > 0) {
-                        let upd = new CmdWindowUpdate(cmd.streamId);
-                        upd.windowSizeIncrement = len;
-                        let upd2 = new CmdWindowUpdate(0);
-                        upd2.windowSizeIncrement = len;
-                        let cmdPacker = this.commandPacker;
-                        try {
-                            cmdPacker.post(sip, upd);
-                            cmdPacker.post(sip, upd2);
-                        }
-                        catch(e) {
-                            BayLog.error_e(e);
-                        }
-                    }
-
-                    if (resume)
-                        sip.resume(Ship.SHIP_ID_NOCHECK);
-                });
+                tur.req.setLimit(reqContLen)
             }
 
             try {
@@ -259,7 +258,7 @@ export class H2InboundHandler extends H2ProtocolHandler implements InboundHandle
                 else {
                     // Delay send
                     tur.error = e;
-                    tur.req.setContentHandler(ReqContentHandlerUtil.devNull);
+                    tur.req.setReqContentHandler(ReqContentHandlerUtil.devNull);
                     return NextSocketAction.CONTINUE;
                 }
             }
@@ -279,7 +278,35 @@ export class H2InboundHandler extends H2ProtocolHandler implements InboundHandle
 
         let success = true;
         if(cmd.length > 0) {
-            success = tur.req.postContent(Tour.TOUR_ID_NOCHECK, cmd.data, cmd.start, cmd.length);
+            let tid = tur.tourId
+            success =
+                tur.req.postReqContent(
+                    Tour.TOUR_ID_NOCHECK,
+                    cmd.data,
+                    cmd.start,
+                    cmd.length,
+                    (len, resume) => {
+                        tur.checkTourId(tid);
+
+                        if (len > 0) {
+                            let upd = new CmdWindowUpdate(cmd.streamId);
+                            upd.windowSizeIncrement = len;
+                            let upd2 = new CmdWindowUpdate(0);
+                            upd2.windowSizeIncrement = len;
+                            try {
+                                this.protocolHandler.post(upd);
+                                this.protocolHandler.post(upd2);
+                            }
+                            catch(e) {
+                                BayLog.error_e(e);
+                            }
+                        }
+
+                        if (resume)
+                            tur.ship.resumeRead(Ship.SHIP_ID_NOCHECK);
+                    });
+
+
             if (tur.req.bytesPosted >= tur.req.headers.contentLength()) {
 
                 if(tur.error != null){
@@ -312,7 +339,7 @@ export class H2InboundHandler extends H2ProtocolHandler implements InboundHandle
     }
 
     handleSettings(cmd: CmdSettings): number {
-        let sip = this.inboundShip()
+        let sip = this.ship()
         BayLog.debug("%s handleSettings: stmid=%d", sip, cmd.streamId);
         if(cmd.flags.ack())
             return NextSocketAction.CONTINUE; // ignore ACK
@@ -344,36 +371,36 @@ export class H2InboundHandler extends H2ProtocolHandler implements InboundHandle
         }
 
         let res = new CmdSettings(0, new H2Flags(H2Flags.FLAGS_ACK));
-        this.commandPacker.post(sip, res);
+        this.protocolHandler.post(res);
         return NextSocketAction.CONTINUE;
     }
 
     handleWindowUpdate(cmd: CmdWindowUpdate): number {
         if(cmd.windowSizeIncrement == 0)
             throw new ProtocolException("Invalid increment value");
-        BayLog.debug("%s handleWindowUpdate: stmid=%d siz=%d", this.ship,  cmd.streamId, cmd.windowSizeIncrement);
+        BayLog.debug("%s handleWindowUpdate: stmid=%d siz=%d", this.ship(),  cmd.streamId, cmd.windowSizeIncrement);
         let windowSizse = cmd.windowSizeIncrement;
         return NextSocketAction.CONTINUE;
     }
 
     handleGoAway(cmd: CmdGoAway): number {
         BayLog.debug("%s received GoAway: lastStm=%d code=%d desc=%s debug=%s",
-            this.ship, cmd.lastStreamId, cmd.errorCode, H2ErrorCode.msg.get(cmd.errorCode.toString()), new String(cmd.debugData));
+            this.ship(), cmd.lastStreamId, cmd.errorCode, H2ErrorCode.msg.get(cmd.errorCode.toString()), new String(cmd.debugData));
         return NextSocketAction.CLOSE;
     }
 
     handlePing(cmd: CmdPing): number {
-        let sip = this.inboundShip();
+        let sip = this.ship();
         BayLog.debug("%s handle_ping: stm=%d", sip, cmd.streamId);
 
         let res = new CmdPing(cmd.streamId, new H2Flags(H2Flags.FLAGS_ACK), cmd.opaqueData);
-        this.commandPacker.post(sip, res);
+        this.protocolHandler.post(res);
         return NextSocketAction.CONTINUE;
     }
 
     handleRstStream(cmd: CmdRstStream): number {
         BayLog.debug("%s received RstStream: stmid=%d code=%d desc=%s",
-            this.ship, cmd.streamId, cmd.errorCode, H2ErrorCode.msg.get(cmd.errorCode.toString()));
+            this.ship(), cmd.streamId, cmd.errorCode, H2ErrorCode.msg.get(cmd.errorCode.toString()));
         return NextSocketAction.CONTINUE;
     }
 
@@ -383,8 +410,12 @@ export class H2InboundHandler extends H2ProtocolHandler implements InboundHandle
     // Private methods
     //////////////////////////////////////////////////////
 
+    ship(): InboundShip {
+        return this.protocolHandler.ship as InboundShip
+    }
+
     getTour(key: number): Tour {
-        return this.inboundShip().getTour(key)
+        return this.ship().getTour(key)
     }
 
     endReqContent(chkId: number, tur: Tour): void {
@@ -392,14 +423,14 @@ export class H2InboundHandler extends H2ProtocolHandler implements InboundHandle
     }
 
     startTour(tur: Tour): void {
-        let sip = this.inboundShip();
+        let sip: InboundShip = this.ship();
 
         HttpUtil.parseHostPort(tur, sip.portDocker.isSecure() ? 443 : 80);
         HttpUtil.parseAuthrization(tur);
 
         tur.req.protocol = this.httpProtocol;
 
-        let skt: net.Socket = sip.ch.socket
+        let skt = (sip.rudder as SocketRudder).socket()
         tur.req.remotePort = skt.remotePort;
 
         tur.req.remoteAddress = skt.remoteAddress;

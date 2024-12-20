@@ -1,5 +1,5 @@
 import {Reusable} from "../util/Reusable";
-import {InboundShip} from "../docker/base/inboundShip";
+import {InboundShip} from "../common/inboundShip";
 import {Counter} from "../util/counter";
 import {Town} from "../docker/town";
 import {City} from "../docker/city";

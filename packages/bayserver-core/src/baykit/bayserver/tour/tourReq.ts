@@ -50,7 +50,6 @@ export class TourReq implements Reusable {
     bytesConsumed: number;
     bytesLimit: number;
     contentHandler: ReqContentHandler;
-    consumeListener: ContentConsumeListener;
     available: boolean;
     ended: boolean;
 
@@ -94,7 +93,6 @@ export class TourReq implements Reusable {
 
         this.charset = null;
         this.contentHandler = null;
-        this.consumeListener = null;
         this.available = false;
         this.ended = false;
     }
@@ -110,7 +108,7 @@ export class TourReq implements Reusable {
             return this.remoteHostFunc();
     }
 
-    setContentHandler(hnd: ReqContentHandler) {
+    setReqContentHandler(hnd: ReqContentHandler) {
         if(hnd == null)
             throw new Error("nullPo")
         if(this.contentHandler != null)
@@ -119,18 +117,17 @@ export class TourReq implements Reusable {
         this.contentHandler = hnd;
     }
 
-    setConsumeListener(limit: number, listener: ContentConsumeListener) {
+    setLimit(limit: number) {
         if (limit < 0) {
             throw new Sink("Invalid limit");
-        }
-        this.consumeListener = listener;
+            }
         this.bytesLimit = limit;
         this.bytesConsumed = 0;
         this.bytesPosted = 0;
         this.available = true;
     }
 
-    postContent(checkId: number, data: Buffer, start: number, len: number): boolean {
+    postReqContent(checkId: number, data: Buffer, start: number, len: number, lis: ContentConsumeListener): boolean {
         this.tour.checkTourId(checkId);
 
         let dataPassed = false
@@ -140,10 +137,6 @@ export class TourReq implements Reusable {
 
         else if (this.tour.req.contentHandler == null) {
             BayLog.warn("%s content read, but no content handler", this.tour);
-        }
-
-        else if (this.consumeListener == null) {
-            throw new Sink("Request consume listener is null");
         }
 
         else if (this.bytesPosted + len > this.bytesLimit) {
@@ -159,7 +152,7 @@ export class TourReq implements Reusable {
             BayLog.debug("%s tour has error.", this.tour)
 
         else {
-            this.contentHandler.onReadContent(this.tour, data, start, len);
+            this.contentHandler.onReadReqContent(this.tour, data, start, len, lis);
             dataPassed = true
         }
 
@@ -191,14 +184,12 @@ export class TourReq implements Reusable {
             throw new ProtocolException("nvalid request data length: " + this.bytesPosted + "/" + this.bytesLimit);
         }
         if (this.contentHandler != null)
-            this.contentHandler.onEndContent(this.tour);
+            this.contentHandler.onEndReqContent(this.tour);
         this.ended = true;
     }
 
-    consumed(checkId: number, length: number) {
+    consumed(checkId: number, length: number, lis: ContentConsumeListener) {
         this.tour.checkTourId(checkId);
-        if (this.consumeListener == null)
-            throw new Sink("Request consume listener is null");
 
         this.bytesConsumed += length;
         BayLog.debug("%s reqConsumed: len=%d posted=%d limit=%d consumed=%d available=%s",
@@ -214,7 +205,7 @@ export class TourReq implements Reusable {
             resume = true;
         }
 
-        this.consumeListener(length, resume);
+        lis(length, resume);
     }
 
     abort(): boolean {
@@ -226,7 +217,7 @@ export class TourReq implements Reusable {
         else if(this.tour.isRunning()) {
             let aborted: boolean = true;
             if (this.contentHandler != null)
-                aborted = this.contentHandler.onAbort(this.tour);
+                aborted = this.contentHandler.onAbortReq(this.tour);
             if(aborted)
                 this.tour.changeState(this.tour.tourId, Tour.STATE_ABORTED);
             return aborted;

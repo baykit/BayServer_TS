@@ -4,10 +4,7 @@ import {ProtocolHandlerFactory} from "bayserver-core/baykit/bayserver/protocol/p
 import {PacketStore} from "bayserver-core/baykit/bayserver/protocol/packetStore";
 import {ProtocolHandler} from "bayserver-core/baykit/bayserver/protocol/protocolHandler";
 import {FcgProtocolHandler} from "./fcgProtocolHandler";
-import {WarpHandler} from "bayserver-core/baykit/bayserver/docker/warp/warpHandler";
 import {SimpleBuffer} from "bayserver-core/baykit/bayserver/util/simpleBuffer";
-import {WarpData} from "bayserver-core/baykit/bayserver/docker/warp/warpData";
-import {WarpShip} from "bayserver-core/baykit/bayserver/docker/warp/warpShip";
 import {Tour} from "bayserver-core/baykit/bayserver/tour/tour";
 import {DataConsumeListener} from "bayserver-core/baykit/bayserver/util/dataConsumeListener";
 import {CmdBeginRequest} from "./command/cmdBeginRequest";
@@ -28,21 +25,46 @@ import {FcgWarpDocker} from "./fcgWarpDocker";
 import {IOException} from "bayserver-core/baykit/bayserver/util/ioException";
 import {CGIUtil} from "bayserver-core/baykit/bayserver/util/CGIUtil";
 import {FcgParams} from "./FcgParams";
+import {FcgCommandUnPacker} from "./fcgCommandUnPacker";
+import {PacketUnpacker} from "bayserver-core/baykit/bayserver/protocol/packetUnpacker";
+import {FcgPacketUnpacker} from "./fcgPacketUnpacker";
+import {PacketPacker} from "bayserver-core/baykit/bayserver/protocol/packetPacker";
+import {CommandPacker} from "bayserver-core/baykit/bayserver/protocol/commandPacker";
+import {WarpHandler} from "bayserver-core/baykit/bayserver/common/warpHandler";
+import {FcgHandler} from "./fcgHandler";
+import {WarpData} from "bayserver-core/baykit/bayserver/common/warpData";
+import {WarpShip} from "bayserver-core/baykit/bayserver/common/warpShip";
 
 export class FcgWarpHandler_ProtocolHandlerFactory implements ProtocolHandlerFactory<FcgCommand, FcgPacket> {
 
     createProtocolHandler(pktStore: PacketStore<FcgPacket>): ProtocolHandler<FcgCommand, FcgPacket> {
-        return new FcgWarpHandler(pktStore);
+        let warpHandler = new FcgWarpHandler()
+        let commandUnpacker = new FcgCommandUnPacker(warpHandler)
+        let packetUnpacker: PacketUnpacker<FcgPacket> = new FcgPacketUnpacker(pktStore, commandUnpacker)
+        let packetPacker: PacketPacker<FcgPacket> = new PacketPacker<FcgPacket>()
+        let commandPacker: CommandPacker<FcgCommand, FcgPacket, any> = new CommandPacker(packetPacker, pktStore)
+        let protocolHandler =
+            new FcgProtocolHandler(
+                warpHandler,
+                packetUnpacker,
+                packetPacker,
+                commandUnpacker,
+                commandPacker,
+                false
+            )
+        warpHandler.init(protocolHandler)
+        return protocolHandler;
     }
 }
 
-export class FcgWarpHandler extends FcgProtocolHandler implements WarpHandler {
+export class FcgWarpHandler implements WarpHandler, FcgHandler {
 
     curWarpId: number = 0
 
     STATE_READ_HEADER: number = 1
     STATE_READ_CONTENT: number = 2
 
+    protocolHandler: FcgProtocolHandler
     state: number
     lineBuf: SimpleBuffer = new SimpleBuffer()
 
@@ -50,9 +72,12 @@ export class FcgWarpHandler extends FcgProtocolHandler implements WarpHandler {
     last: number
     data: Buffer
 
-    constructor(pktStore: PacketStore<FcgPacket>) {
-        super(pktStore, false);
+    constructor() {
         this.resetState()
+    }
+
+    init(ph: FcgProtocolHandler) {
+        this.protocolHandler = ph
     }
 
     //////////////////////////////////////////////////////////////////
@@ -60,7 +85,6 @@ export class FcgWarpHandler extends FcgProtocolHandler implements WarpHandler {
     //////////////////////////////////////////////////////////////////
 
     reset() : void {
-        super.reset();
         this.resetState();
         this.lineBuf.reset();
         this.pos = 0;
@@ -78,28 +102,28 @@ export class FcgWarpHandler extends FcgProtocolHandler implements WarpHandler {
     }
 
     newWarpData(warpId: number): WarpData {
-        return new WarpData(this.ship as WarpShip, warpId);
+        return new WarpData(this.ship(), warpId);
     }
 
-    postWarpHeaders(tur: Tour): void {
+    sendReqHeaders(tur: Tour): void {
         this.sendBeginReq(tur);
         this.sendParams(tur);
     }
 
-    postWarpContents(tur: Tour, buf: Buffer, start: number, len: number, lis: DataConsumeListener): void {
+    sendReqContent(tur: Tour, buf: Buffer, start: number, len: number, lis: DataConsumeListener): void {
         this.sendStdIn(tur, buf, start, len, lis);
     }
 
-    postWarpEnd(tur: Tour): void {
-        let callback = () => {
-            this.ship.agent.nonBlockingHandler.askToRead(this.ship.ch)
-        }
-        this.sendStdIn(tur, null, 0, 0, callback);
+    sendEndReq(tur: Tour, keepAlive: boolean, lis: DataConsumeListener): void {
+        this.sendStdIn(tur, null, 0, 0, lis);
     }
 
     verifyProtocol(protocol: string): void {
     }
 
+    onProtocolError(e: ProtocolException): boolean {
+        throw new Sink()
+    }
 
     //////////////////////////////////////////////////////////////////
     // Implements FcgCommandHandler
@@ -110,7 +134,7 @@ export class FcgWarpHandler extends FcgProtocolHandler implements WarpHandler {
     }
 
     handleEndRequest(cmd: CmdEndRequest): number {
-        let tur = (this.ship as WarpShip).getTour(cmd.reqId);
+        let tur = this.ship().getTour(cmd.reqId);
         this.endReqContent(tur);
         return NextSocketAction.CONTINUE;
     }
@@ -130,7 +154,7 @@ export class FcgWarpHandler extends FcgProtocolHandler implements WarpHandler {
     }
 
     handleStdOut(cmd: CmdStdOut): number {
-        let tur = (this.ship as WarpShip).getTour(cmd.reqId);
+        let tur = this.ship().getTour(cmd.reqId);
         if(tur == null)
             throw new Sink("Tour not found");
 
@@ -149,7 +173,7 @@ export class FcgWarpHandler extends FcgProtocolHandler implements WarpHandler {
 
         if (this.pos < this.last) {
             if (this.state == this.STATE_READ_CONTENT) {
-                let available = tur.res.sendContent(Tour.TOUR_ID_NOCHECK, this.data, this.pos, this.last - this.pos);
+                let available = tur.res.sendResContent(Tour.TOUR_ID_NOCHECK, this.data, this.pos, this.last - this.pos);
                 if(!available)
                     return NextSocketAction.SUSPEND;
             }
@@ -185,13 +209,13 @@ export class FcgWarpHandler extends FcgProtocolHandler implements WarpHandler {
                 tur.res.headers.remove(HttpHeaders.STATUS);
             }
 
-            let sip = this.ship as WarpShip;
+            let sip = this.ship()
 
             BayLog.debug(sip + " fcgi: read header status=" + status + " contlen=" + wdat.resHeaders.contentLength());
             let sid = sip.id();
             tur.res.setConsumeListener((len, resume) => {
                 if(resume) {
-                    sip.resume(sid);
+                    sip.resumeRead(sid);
                 }
             });
 
@@ -238,8 +262,8 @@ export class FcgWarpHandler extends FcgProtocolHandler implements WarpHandler {
     }
 
     private endReqContent(tur: Tour) : void {
-        (this.ship as WarpShip).endWarpTour(tur);
-        tur.res.endContent(Tour.TOUR_ID_NOCHECK);
+        this.ship().endWarpTour(tur);
+        tur.res.endResContent(Tour.TOUR_ID_NOCHECK);
         this.resetState();
     }
 
@@ -253,18 +277,18 @@ export class FcgWarpHandler extends FcgProtocolHandler implements WarpHandler {
 
     private sendStdIn(tur: Tour, data: Buffer, ofs: number, len: number, lis: DataConsumeListener) : void {
         let cmd = new CmdStdIn(WarpData.get(tur).warpId, data, ofs, len);
-        (this.ship as WarpShip).post(cmd, lis);
+        this.ship().post(cmd, lis);
     }
 
     private sendBeginReq(tur: Tour) : void {
         let cmd = new CmdBeginRequest(WarpData.get(tur).warpId);
         cmd.role = CmdBeginRequest.FCGI_RESPONDER;
         cmd.keepConn = true;
-        (this.ship as WarpShip).post(cmd);
+        this.ship().post(cmd);
     }
 
     private sendParams(tur: Tour) : void {
-        let dkr = (this.ship as WarpShip).getDocker() as FcgWarpDocker
+        let dkr = this.ship().getDocker() as FcgWarpDocker
         let scriptBase =  dkr.scriptBase;
         if(scriptBase == null)
             scriptBase = tur.town.getLocation();
@@ -300,13 +324,17 @@ export class FcgWarpHandler extends FcgProtocolHandler implements WarpHandler {
 
         if(BayServer.harbor.isTraceHeader()) {
             cmd.params.forEach( kv =>
-                BayLog.info("%s fcgi_warp: env: %s=%s", this.ship, kv[0], kv[1]));
+                BayLog.info("%s fcgi_warp: env: %s=%s", this.ship(), kv[0], kv[1]));
         }
 
-        (this.ship as WarpShip).post(cmd);
+        this.ship().post(cmd);
 
         let cmdParamsEnd = new CmdParams(warpId);
-        (this.ship as WarpShip).post(cmdParamsEnd);
+        this.ship().post(cmdParamsEnd);
+    }
+
+    ship(): WarpShip {
+        return this.protocolHandler.ship as WarpShip
     }
 }
 

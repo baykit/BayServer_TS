@@ -2,21 +2,22 @@ import {Tour} from "./tour";
 import {Reusable} from "../util/Reusable";
 import {HttpException} from "../httpException";
 import {ContentConsumeListener, ContentConsumeListenerUtil} from "./contentConsumeListener";
-import {SysUtil} from "../util/sysUtil";
 import {HttpStatus} from "../util/httpStatus";
-import {Mimes} from "../util/mimes";
-import * as fs from "fs";
 import {HttpHeaders} from "../util/httpHeaders";
 import {BayServer} from "../bayserver";
 import {StrUtil} from "../util/strUtil";
-import {PlainTransporter} from "../agent/transporter/plainTransporter";
-import {SendFileYacht} from "./sendFileYacht";
 import {BayLog} from "../bayLog";
 import {Sink} from "../sink";
 import {ProtocolException} from "../protocol/protocolException";
-import {ChannelWrapper} from "../agent/channelWrapper";
 import {IOException} from "../util/ioException";
-import {InboundHandler} from "../docker/base/inboundHandler";
+import {
+    Trouble,
+    TROUBLE_METHOD_GUIDE,
+    TROUBLE_METHOD_REROUTE,
+    TROUBLE_METHOD_TEXT,
+    TroubleCommand
+} from "../docker/trouble";
+import {Buffer} from "buffer";
 
 export class TourRes implements Reusable{
 
@@ -36,7 +37,6 @@ export class TourRes implements Reusable{
     bytesPosted: number;
     bytesConsumed: number;
     bytesLimit: number;
-    yacht: SendFileYacht
 
     public resConsumeListener: ContentConsumeListener;
     canCompress: boolean;
@@ -49,7 +49,6 @@ export class TourRes implements Reusable{
 
 
     init() {
-        this.yacht = new SendFileYacht();
     }
 
     toString(): string {
@@ -67,7 +66,6 @@ export class TourRes implements Reusable{
 
         this.charset = null;
         this.headerSent = false;
-        this.yacht.reset();
         this.available = false;
         this.resConsumeListener = null;
         this.canCompress = false;
@@ -106,7 +104,53 @@ export class TourRes implements Reusable{
         }
 
         try {
-            this.tour.ship.sendHeaders(this.tour.shipId, this.tour);
+            var handled: boolean = false;
+            if(!this.tour.errorHandling && this.tour.res.headers.status >= 400) {
+                let trb: Trouble = BayServer.harbor.getTrouble();
+                if(trb != null) {
+                    let cmd: TroubleCommand = trb.find(this.tour.res.headers.status);
+                    if (cmd != null) {
+                        let errTour: Tour = this.tour.ship.getErrorTour();
+                        errTour.req.uri = cmd.target;
+                        this.tour.req.headers.copyTo(errTour.req.headers);
+                        this.tour.res.headers.copyTo(errTour.res.headers);
+                        errTour.req.remotePort = this.tour.req.remotePort;
+                        errTour.req.remoteAddress = this.tour.req.remoteAddress;
+                        errTour.req.serverAddress = this.tour.req.serverAddress;
+                        errTour.req.serverPort = this.tour.req.serverPort;
+                        errTour.req.serverName = this.tour.req.serverName;
+                        errTour.res.headerSent = this.tour.res.headerSent;
+                        this.tour.changeState(Tour.TOUR_ID_NOCHECK, Tour.STATE_ZOMBIE);
+                        switch (cmd.method) {
+                            case TROUBLE_METHOD_GUIDE: {
+                                try {
+                                    errTour.go();
+                                } catch (e) {
+                                    throw new IOException(e);
+                                }
+                                break;
+                            }
+
+                            case TROUBLE_METHOD_TEXT: {
+                                this.tour.ship.sendHeaders(this.tour.shipId, errTour);
+                                let data: Buffer = Buffer.from(cmd.target);
+                                errTour.res.sendResContent(Tour.TOUR_ID_NOCHECK, data, 0, data.length);
+                                errTour.res.endResContent(Tour.TOUR_ID_NOCHECK);
+                                break;
+                            }
+
+                            case TROUBLE_METHOD_REROUTE: {
+                                errTour.res.sendHttpException(Tour.TOUR_ID_NOCHECK, HttpException.movedTemp(cmd.target));
+                                break;
+                            }
+                        }
+                        handled = true;
+                    }
+                }
+            }
+            if(!handled) {
+                this.tour.ship.sendHeaders(this.tour.shipId, this.tour);
+            }
         }
         catch(e) {
             BayLog.debug("%s Error on sending headers: %s", this.tour, e.message);
@@ -126,7 +170,7 @@ export class TourRes implements Reusable{
         this.available = true;
     }
 
-    sendContent(checkId: number, buf: Buffer, ofs: number, len: number) {
+    sendResContent(checkId: number, buf: Buffer, ofs: number, len: number) {
         if (buf == null)
             throw new Error("nullPo");
         this.tour.checkTourId(checkId);
@@ -187,7 +231,7 @@ export class TourRes implements Reusable{
         return this.available;
     }
 
-    endContent(chkId: number) {
+    endResContent(chkId: number) {
         this.tour.checkTourId(chkId);
 
         BayLog.debug("%s end ResContent", this);
@@ -292,60 +336,7 @@ export class TourRes implements Reusable{
                 this.headerSent = true;
             }
         }
-        this.endContent(chkId);
-    }
-
-    //////////////////////////////////////////////////////
-    // Sending file methods
-    //////////////////////////////////////////////////////
-
-    sendFile(chkId: number, file: string, charset: string, async: boolean) {
-        this.tour.checkTourId(chkId);
-
-        if (this.tour.isZombie())
-            return;
-
-        if (SysUtil.isDirectory(file)) {
-            throw new HttpException(HttpStatus.FORBIDDEN, file);
-        } else if (!SysUtil.exists(file)) {
-            throw new HttpException(HttpStatus.NOT_FOUND, file);
-        }
-
-        var mimeType: string = null;
-
-        let rname = file;
-        let pos = rname.lastIndexOf('.');
-        if (pos >= 0) {
-            let ext = rname.substring(pos + 1).toLowerCase();
-            mimeType = Mimes.getType(ext);
-        }
-
-        if (mimeType == null)
-            mimeType = "application/octet-stream";
-
-        if (mimeType.startsWith("text/") && StrUtil.isSet(this.charset))
-            mimeType = mimeType + "; charset=" + charset;
-
-        //resHeaders.setStatus(HttpStatus.OK);
-        let fileSize = SysUtil.getFileSize(file)
-        this.headers.setContentType(mimeType);
-        this.headers.setContentLength(fileSize);
-        try {
-            this.sendHeaders(Tour.TOUR_ID_NOCHECK);
-
-            let bufsize = this.tour.ship.protocolHandler.maxResPacketDataSize();
-            let fd = fs.openSync(file, "r")
-            let buf = Buffer.alloc(8192);
-            let tp = new PlainTransporter(false, bufsize);
-            this.yacht.init(this.tour, file, fileSize, tp);
-            let ch = new ChannelWrapper(fd)
-            tp.init(this.tour.ship.agent.nonBlockingHandler, ch, this.yacht);
-            tp.openValve();
-
-        } catch (e) {
-            BayLog.error_e(e)
-            throw new HttpException(HttpStatus.INTERNAL_SERVER_ERROR, file);
-        }
+        this.endResContent(chkId);
     }
 
     private sendRedirect(chkId: number, status: number, location: string): void {
@@ -367,11 +358,11 @@ export class TourRes implements Reusable{
             }
             finally {
                 this.headerSent = true;
-                this.endContent(chkId)
+                this.endResContent(chkId)
             }
         }
 
-        this.endContent(chkId);
+        this.endResContent(chkId);
     }
 
     private consumed(chkId: number, len: number) {

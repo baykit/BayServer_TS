@@ -5,7 +5,7 @@ import {BayLog} from "../../bayLog";
 import {BayMessage} from "../../bayMessage";
 import {Symbol} from "../../symbol";
 import {StrUtil} from "../../util/strUtil";
-import {GrandAgentMonitor} from "../grandAgentMonitor";
+import {GrandAgentMonitor} from "../monitor/grandAgentMonitor";
 import {Server} from "net";
 
 export class SignalAgent {

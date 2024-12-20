@@ -1,11 +1,9 @@
 import {City} from "./city";
-import {GrandAgent} from "../agent/grandAgent";
-import {Transporter} from "../agent/transporter/transporter";
 import {ProtocolHandler} from "../protocol/protocolHandler";
-import {InboundShip} from "./base/inboundShip";
+import {InboundShip} from "../common/inboundShip";
 import * as net from "net";
 import {Secure} from "./Secure";
-import {ChannelWrapper} from "../agent/channelWrapper";
+import {Rudder} from "../rudder/rudder";
 
 export interface Port {
 
@@ -25,7 +23,7 @@ export interface Port {
 
     getTimeoutSec(): number
 
-    checkAdmitted(ch);
+    checkAdmitted(rd: Rudder): void;
 
     getAdditionalHeaders(): string[][];
 
@@ -33,11 +31,11 @@ export interface Port {
 
     findCity(name: string): City;
 
-    newTransporter(agent: GrandAgent, ch: ChannelWrapper): Transporter;
+    onConnected(agentId: number, clientRd: Rudder, serverRd: Rudder): void;
 
-    returnProtocolHandler(agent: GrandAgent, protoHnd: ProtocolHandler<any, any>);
+    returnProtocolHandler(agentId: number,  protoHnd: ProtocolHandler<any, any>): void;
 
-    returnShip(ship: InboundShip);
+    returnShip(ship: InboundShip): void;
 
     createServer(): net.Server;
 

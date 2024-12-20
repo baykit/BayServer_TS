@@ -1,23 +1,25 @@
 import {Docker} from "bayserver-core/baykit/bayserver/docker/docker";
 import {PacketStore} from "bayserver-core/baykit/bayserver/protocol/packetStore";
 import {ProtocolHandlerStore} from "bayserver-core/baykit/bayserver/protocol/protocolHandlerStore";
-import {WarpDocker} from "bayserver-core/baykit/bayserver/docker/warp/warpDocker";
 import {BcfElement} from "bayserver-core/baykit/bayserver/bcf/bcfElement";
 import {BayLog} from "bayserver-core/baykit/bayserver/bayLog";
 import {BcfKeyVal} from "bayserver-core/baykit/bayserver/bcf/bcfKeyVal";
 import {FcgDockerConst} from "./fcgDockerConst";
 import {GrandAgent} from "bayserver-core/baykit/bayserver/agent/grandAgent";
-import {Transporter} from "bayserver-core/baykit/bayserver/agent/transporter/transporter";
-import * as net from "net";
-import {PlainTransporter} from "bayserver-core/baykit/bayserver/agent/transporter/plainTransporter";
+import {PlainTransporter} from "bayserver-core/baykit/bayserver/agent/multiplexer/plainTransporter";
 import {IOUtil} from "bayserver-core/baykit/bayserver/util/ioUtil";
 import {FcgPacketFactory} from "./fcgPacketFactory";
 import {FcgWarpHandler_ProtocolHandlerFactory} from "./fcgWarpHandler";
-import {ChannelWrapper} from "bayserver-core/baykit/bayserver/agent/channelWrapper";
+import {WarpBase} from "bayserver-core/baykit/bayserver/docker/base/warpBase";
+import {Rudder} from "bayserver-core/baykit/bayserver/rudder/rudder";
+import {Ship} from "bayserver-core/baykit/bayserver/ship/ship";
+import {Transporter} from "bayserver-core/baykit/bayserver/agent/multiplexer/transporter";
+import {SocketRudder} from "bayserver-core/baykit/bayserver/rudder/socketRudder";
+import {Socket} from "net";
 
 
 
-export class FcgWarpDocker extends WarpDocker {
+export class FcgWarpDocker extends WarpBase {
 
     scriptBase: string
     docRoot: string
@@ -50,7 +52,7 @@ export class FcgWarpDocker extends WarpDocker {
     }
 
     ////////////////////////////////////////////////////
-    // Implements WarpDocker
+    // Implements WarpBase
     ////////////////////////////////////////////////////
 
     isSecure(): boolean {
@@ -58,15 +60,20 @@ export class FcgWarpDocker extends WarpDocker {
     }
 
     ////////////////////////////////////////////////////
-    // Implements WarpDocker
+    // Implements WarpBase
     ////////////////////////////////////////////////////
 
     protocol(): string {
         return FcgDockerConst.PROTO_NAME;
     }
 
-    newTransporter(agt: GrandAgent, ch: ChannelWrapper): Transporter {
-        return new PlainTransporter(false, IOUtil.getSockRecvBufSize(ch.socket));
+    newTransporter(agt: GrandAgent, rd: Rudder, sip: Ship): Transporter {
+        return new PlainTransporter(
+            agt.netMultiplexer,
+            sip,
+            false,
+            IOUtil.getSockRecvBufSize((rd as SocketRudder).socket()),
+            false)
     }
 }
 

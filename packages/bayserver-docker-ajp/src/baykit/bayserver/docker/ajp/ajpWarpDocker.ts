@@ -3,20 +3,22 @@ import {PacketStore} from "bayserver-core/baykit/bayserver/protocol/packetStore"
 import {ProtocolHandlerStore} from "bayserver-core/baykit/bayserver/protocol/protocolHandlerStore";
 import {AjpPacketFactory} from "./ajpPacketFactory";
 import {AjpDockerConst} from "./ajpDockerConst";
-import {WarpDocker} from "bayserver-core/baykit/bayserver/docker/warp/warpDocker";
 import {GrandAgent} from "bayserver-core/baykit/bayserver/agent/grandAgent";
-import * as net from "net";
-import {Transporter} from "bayserver-core/baykit/bayserver/agent/transporter/transporter";
-import {PlainTransporter} from "bayserver-core/baykit/bayserver/agent/transporter/plainTransporter";
 import {IOUtil} from "bayserver-core/baykit/bayserver/util/ioUtil";
 import {AjpWarpHandler_ProtocolHandlerFactory} from "./ajpWarpHandler";
-import {ChannelWrapper} from "bayserver-core/baykit/bayserver/agent/channelWrapper";
+import {Rudder} from "bayserver-core/baykit/bayserver/rudder/rudder";
+import {SocketRudder} from "bayserver-core/baykit/bayserver/rudder/socketRudder";
+import {Socket} from "net";
+import {WarpBase} from "bayserver-core/baykit/bayserver/docker/base/warpBase";
+import {PlainTransporter} from "bayserver-core/baykit/bayserver/agent/multiplexer/plainTransporter";
+import {Transporter} from "bayserver-core/baykit/bayserver/agent/multiplexer/transporter";
+import {Ship} from "bayserver-core/baykit/bayserver/ship/ship";
 
 
-export class AjpWarpDocker extends WarpDocker {
+export class AjpWarpDocker extends WarpBase {
 
     ////////////////////////////////////////////////////
-    // Implements WarpDocker
+    // Implements WarpBase
     ////////////////////////////////////////////////////
 
     isSecure(): boolean {
@@ -24,15 +26,20 @@ export class AjpWarpDocker extends WarpDocker {
     }
 
     ////////////////////////////////////////////////////
-    // Implements WarpDocker
+    // Implements WarpBase
     ////////////////////////////////////////////////////
 
     protocol(): string {
         return AjpDockerConst.PROTO_NAME;
     }
 
-    newTransporter(agt: GrandAgent, ch: ChannelWrapper): Transporter {
-        return new PlainTransporter(false, IOUtil.getSockRecvBufSize(ch.socket));
+    newTransporter(agt: GrandAgent, rd: Rudder, sip: Ship): Transporter {
+        return new PlainTransporter(
+            agt.netMultiplexer,
+            sip,
+            false,
+            IOUtil.getSockRecvBufSize((rd as SocketRudder).socket()),
+            false)
     }
 }
 
