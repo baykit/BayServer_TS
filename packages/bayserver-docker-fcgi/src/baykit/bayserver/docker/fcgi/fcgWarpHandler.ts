@@ -262,7 +262,7 @@ export class FcgWarpHandler implements WarpHandler, FcgHandler {
     }
 
     private endReqContent(tur: Tour) : void {
-        this.ship().endWarpTour(tur);
+        this.ship().endWarpTour(tur, true);
         tur.res.endResContent(Tour.TOUR_ID_NOCHECK);
         this.resetState();
     }

@@ -135,7 +135,7 @@ export class AjpWarpHandler implements WarpHandler, AjpHandler {
         if (this.state == this.STATE_READ_HEADER)
             this.endResHeader(tur);
 
-        this.endResContent(tur);
+        this.endResContent(tur, cmd.reuse);
         if(cmd.reuse)
             return NextSocketAction.CONTINUE;
         else {
@@ -216,8 +216,8 @@ export class AjpWarpHandler implements WarpHandler, AjpHandler {
         this.changeState(this.STATE_READ_CONTENT);
     }
 
-    private endResContent(tur: Tour) : void {
-        this.ship().endWarpTour(tur);
+    private endResContent(tur: Tour, keep: boolean) : void {
+        this.ship().endWarpTour(tur, keep);
         tur.res.endResContent(Tour.TOUR_ID_NOCHECK);
         this.resetState();
     }

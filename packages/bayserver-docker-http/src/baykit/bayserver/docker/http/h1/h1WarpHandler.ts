@@ -248,7 +248,7 @@ export class H1WarpHandler implements WarpHandler, H1Handler {
     }
 
     private endResContent(tur: Tour): void {
-        this.getWarpShip().endWarpTour(tur);
+        this.getWarpShip().endWarpTour(tur, true);
         tur.res.endResContent(Tour.TOUR_ID_NOCHECK);
         this.resetState();
         this.getWarpShip().keeping = true;

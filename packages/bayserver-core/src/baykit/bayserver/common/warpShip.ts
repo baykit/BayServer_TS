@@ -195,14 +195,18 @@ export class WarpShip extends Ship {
         }
     }
 
-    endWarpTour(tur: Tour): void {
+    endWarpTour(tur: Tour, keep: boolean): void {
         let wdat: WarpData = WarpData.get(tur);
         BayLog.debug("%s end (tur=%s): started=%b ended=%b", wdat, tur, wdat.started, wdat.ended);
         if(!this.tourMap.has(wdat.warpId))
             throw new Sink("%s WarpId not in tourMap: %d", tur, wdat.warpId);
         else
             this.tourMap.delete(wdat.warpId)
-        this.docker.keep(this);
+
+        if(keep) {
+            BayLog.debug("%s keep warp ship", this);
+            this.docker.keep(this);
+        }
     }
 
     notifyServiceUnavailable(msg: string): void {
