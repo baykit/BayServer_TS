@@ -29,9 +29,8 @@ import {ErrorLetter} from "./letter/errorLetter";
 import {Letter} from "./letter/letter";
 import {ValveMultiplexer} from "./multiplexer/valveMultiplexer";
 import {MULTIPLEXER_TYPE_VALVE, RECIPIENT_TYPE_EVENT, RECIPIENT_TYPE_PIPE} from "../docker/harbor";
-import {promisify} from "util";
-import {finished} from "stream";
-import * as fs from "fs";
+import {Postpone} from "../common/postpone";
+import {exit} from "process";
 
 
 export class GrandAgent {
@@ -44,7 +43,8 @@ export class GrandAgent {
     static readonly CMD_MEM_USAGE = 3
     static readonly CMD_SHUTDOWN = 4
     static readonly CMD_ABORT = 5
-    static readonly CMD_FORK = 6
+    static readonly CMD_CATCHUP = 6
+    static readonly CMD_FORK = 7
 
     static agentCount: number
     static maxAgentId: number = 0
@@ -69,10 +69,11 @@ export class GrandAgent {
     private timerHandlers: TimerHandler[] = []
     private timerId: NodeJS.Timeout | null = null;
     commandReceiver: CommandReceiver
+    private postponeQueue: Postpone[] = []
 
     private static readonly INTERVAL_SEC = 10;
     private interval_sec: number = 10;
-    private lastTimeoutCheck: number
+    private lastTimeoutCheck: number = 0
 
 
     private constructor(
@@ -299,8 +300,6 @@ export class GrandAgent {
 
         this.commandReceiver.end()
         GrandAgent.agents.delete(this.agentId)
-
-        //this.abort()
     }
 
     abort(err: Error = null) {
@@ -310,12 +309,9 @@ export class GrandAgent {
         }
 
         // Exit after 5 seconds
-        /*
         setTimeout(() => {
             exit(1)
         }, 5000)
-
-         */
     }
 
     reqShutdown() {
@@ -345,6 +341,38 @@ export class GrandAgent {
         for (const [rd, portDkr] of BayServer.anchorablePortMap) {
             //BayLog.debug("%s send server socket to agt#%d(port=%d)", this, agentId, portDkr.getPort())
             child.send("serverSocket", (rd as ServerRudder).server)
+        }
+    }
+
+    addPostpone(p: Postpone): void {
+        this.postponeQueue.push(p)
+    }
+
+    countPostpone(): number {
+        return this.postponeQueue.length
+    }
+
+    reqCatchUp(): void {
+        BayLog.debug("%s Req catchUp", this);
+        if(this.countPostpone() > 0) {
+            this.catchUp();
+        }
+        else {
+            try {
+                this.commandReceiver.sendCommandToMonitor(GrandAgent.CMD_CATCHUP);
+            }
+            catch (e) {
+                BayLog.error_e(e);
+                this.abort();
+            }
+        }
+    }
+
+    catchUp(): void {
+        BayLog.debug("%s catchUp", this)
+        if(this.postponeQueue.length > 0) {
+            let p = this.postponeQueue.pop()
+            p.run()
         }
     }
 

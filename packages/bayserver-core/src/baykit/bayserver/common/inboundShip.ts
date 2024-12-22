@@ -263,7 +263,6 @@ export class InboundShip extends Ship {
             }
         }
 
-        BayLog.info("%s tourHandler=%s", this, this.tourHandler())
         this.tourHandler().sendEndTour(tur, keepAlive, callback);
     }
 

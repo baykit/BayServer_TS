@@ -120,7 +120,7 @@ export class PlainTransporter implements Transporter {
     }
 
     checkTimeout(rd: Rudder, durationSec: number): boolean {
-        return false;
+        return this.ship.checkTimeout(durationSec);
     }
 
     getReadBufferSize(): number {

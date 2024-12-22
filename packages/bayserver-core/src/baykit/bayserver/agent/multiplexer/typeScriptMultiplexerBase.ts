@@ -20,6 +20,8 @@ export abstract class TypeScriptMultiplexerBase extends MultiplexerBase implemen
         if(!anchorable) {
             throw new Sink()
         }
+
+        agt.addTimerHandler(this)
     }
 
     //////////////////////////////////////////////////////

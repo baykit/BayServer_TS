@@ -29,6 +29,10 @@ export class CgiDocker extends ClubBase {
     docRoot: string;
     timeoutSec: number = CgiDocker.DEFAULT_TIMEOUT_SEC;
 
+    maxProcesses: number = -1
+    processCount: number = 0
+    waitCount: number = 0
+
     //////////////////////////////////////////////////////
     // Implements DockerBase
     //////////////////////////////////////////////////////
@@ -52,6 +56,10 @@ export class CgiDocker extends ClubBase {
 
             case "timeout":
                 this.timeoutSec = Number.parseInt(kv.value);
+                break;
+
+            case "maxprocesses":
+                this.maxProcesses = Number.parseInt(kv.value);
                 break;
         }
         return true;
@@ -94,62 +102,37 @@ export class CgiDocker extends ClubBase {
             throw new HttpException(HttpStatus.NOT_FOUND, fileName);
         }
 
-        let handler = new CgiReqContentHandler(this, tur);
+        let handler = new CgiReqContentHandler(this, tur, env);
         tur.req.setReqContentHandler(handler);
-        handler.startTour(env);
-    }
-
-    onProcessStarted(tur: Tour, handler: CgiReqContentHandler) {
-        let bufsize = tur.ship.protocolHandler.maxResPacketDataSize();
-        let outRd = new ReadableRudder(handler.childProcess.stdout)
-        let errRd = new ReadableRudder(handler.childProcess.stderr)
-
-        let agt = GrandAgent.get(tur.ship.agentId)
-        let mpx: Multiplexer = null
-
-        switch(BayServer.harbor.getCgiMultiplexer()) {
-            case MULTIPLEXER_TYPE_VALVE:
-                mpx = agt.valveMultiplexer
-                break
-
-            default:
-                throw new Sink()
-        }
-
-        let outShip = new CgiStdOutShip();
-        let outTp = new PlainTransporter(mpx, outShip, false, bufsize, false);
-        outTp.init()
-
-        outShip.initStdOut(outRd, tur.ship.agentId, tur, outTp, handler)
-
-        mpx.addRudderState(
-            outRd,
-            new RudderState(outRd, outTp)
-        )
-
-        let sid = tur.ship.shipId
-        tur.res.setConsumeListener((len, resume) => {
-            if(resume)
-                outShip.resumeRead(sid)
-        })
-
-        let errShip = new CgiStdErrShip();
-        let errTp = new PlainTransporter(agt.netMultiplexer, errShip, false, bufsize, false);
-        errTp.init()
-        errShip.initStdErr(errRd, tur.ship.agentId, handler)
-
-        mpx.addRudderState(
-            errRd,
-            new RudderState(errRd, errTp)
-        )
-
-        mpx.reqRead(outRd)
-        mpx.reqRead(errRd)
+        handler.reqStartTour()
     }
 
     //////////////////////////////////////////////////////
     // Other methods
     //////////////////////////////////////////////////////
+
+    getWaitCount(): number {
+        return this.waitCount
+    }
+
+    addProcessCount(): boolean {
+        if(this.maxProcesses <= 0 || this.processCount < this.maxProcesses) {
+            this.processCount ++;
+            BayLog.debug("%s Process count: %d", this, this.processCount);
+            return true;
+        }
+
+        this.waitCount++;
+        return false;
+    }
+
+    subProcessCount(): void {
+        this.processCount--
+    }
+
+    subWaitCount(): void {
+        this.waitCount--
+    }
 
     createCommand(env: { [p: string]: string }): string[] {
         let script = env[CGIUtil.SCRIPT_FILENAME]

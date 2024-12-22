@@ -7,8 +7,19 @@ import {ChildProcess} from "child_process";
 import * as child_process from "child_process";
 import {IOException} from "bayserver-core/baykit/bayserver/util/ioException";
 import {ContentConsumeListener} from "bayserver-core/baykit/bayserver/tour/contentConsumeListener";
+import {GrandAgent} from "bayserver-core/baykit/bayserver/agent/grandAgent";
+import {Postpone} from "bayserver-core/baykit/bayserver/common/postpone";
+import {ReadableRudder} from "bayserver-core/baykit/bayserver/rudder/readableRudder";
+import {Multiplexer} from "bayserver-core/baykit/bayserver/common/multiplexer";
+import {BayServer} from "bayserver-core/baykit/bayserver/bayserver";
+import {MULTIPLEXER_TYPE_VALVE} from "bayserver-core/baykit/bayserver/docker/harbor";
+import {Sink} from "bayserver-core/baykit/bayserver/sink";
+import {CgiStdOutShip} from "./cgiStdOutShip";
+import {PlainTransporter} from "bayserver-core/baykit/bayserver/agent/multiplexer/plainTransporter";
+import {RudderState} from "bayserver-core/baykit/bayserver/agent/multiplexer/rudderState";
+import {CgiStdErrShip} from "./cgiStdErrShip";
 
-export class CgiReqContentHandler implements ReqContentHandler{
+export class CgiReqContentHandler implements ReqContentHandler, Postpone {
 
     readonly cgiDocker: CgiDocker;
     readonly tour: Tour;
@@ -21,17 +32,17 @@ export class CgiReqContentHandler implements ReqContentHandler{
     private exitCode: number = null
     private execError: Error = null
     private lastAccess: number
+    env: {[key: string]: string}
 
-
-    constructor(cgiDocker: CgiDocker, tour: Tour) {
+    constructor(cgiDocker: CgiDocker, tour: Tour, env: {[key: string]: string}) {
         this.cgiDocker = cgiDocker;
         this.tour = tour;
         this.tourId = tour.id()
+        this.env = env
         this.isStdOutClosed = true;
         this.isStdErrClosed = true;
         this.access()
     }
-
 
 
     //////////////////////////////////////////////////////
@@ -67,13 +78,36 @@ export class CgiReqContentHandler implements ReqContentHandler{
     }
 
     //////////////////////////////////////////////////////
+    // Implements Postpone
+    //////////////////////////////////////////////////////
+
+    run(): void {
+        this.cgiDocker.subWaitCount()
+        BayLog.debug("%s challenge postponed tour", this.tour, this.cgiDocker.getWaitCount());
+        this.reqStartTour();
+    }
+
+    //////////////////////////////////////////////////////
     // Other methods
     //////////////////////////////////////////////////////
 
-    startTour(env: {[key: string]: string}): void {
+    reqStartTour() {
+        if(this.cgiDocker.addProcessCount()) {
+            BayLog.debug("%s start tour: wait count=%d", this.tour, this.cgiDocker.getWaitCount());
+            this.startTour();
+        }
+        else {
+            BayLog.warn("%s Cannot start tour: wait count=%d", this.tour, this.cgiDocker.getWaitCount());
+            let agt = GrandAgent.get(this.tour.ship.agentId);
+            agt.addPostpone(this);
+        }
+        this.access();
+    }
+
+    startTour(): void {
         this.available = false;
 
-        let cmdArgs = this.cgiDocker.createCommand(env)
+        let cmdArgs = this.cgiDocker.createCommand(this.env)
         let cmd = cmdArgs[0]
         cmdArgs.shift()
 
@@ -82,7 +116,7 @@ export class CgiReqContentHandler implements ReqContentHandler{
             cmdArgs,
             {
                 stdio: ["pipe", "pipe", "pipe"],
-                env: env
+                env: this.env
             })
         BayLog.debug("%s created process: %d", this.tour, this.childProcess.pid);
 
@@ -101,9 +135,56 @@ export class CgiReqContentHandler implements ReqContentHandler{
             BayLog.debug("%s Process spawned: pid=%s", this.tour, this.childProcess.pid)
         })
 
-        this.cgiDocker.onProcessStarted(this.tour, this)
         this.isStdOutClosed = false;
         this.isStdErrClosed = false;
+
+        let bufsize = this.tour.ship.protocolHandler.maxResPacketDataSize();
+        let outRd = new ReadableRudder(this.childProcess.stdout)
+        let errRd = new ReadableRudder(this.childProcess.stderr)
+
+        let agt = GrandAgent.get(this.tour.ship.agentId)
+        let mpx: Multiplexer = null
+
+        switch(BayServer.harbor.getCgiMultiplexer()) {
+            case MULTIPLEXER_TYPE_VALVE:
+                mpx = agt.valveMultiplexer
+                break
+
+            default:
+                throw new Sink()
+        }
+
+        let outShip = new CgiStdOutShip();
+        let outTp = new PlainTransporter(mpx, outShip, false, bufsize, false);
+        outTp.init()
+
+        outShip.initStdOut(outRd, this.tour.ship.agentId, this.tour, outTp, this)
+
+        mpx.addRudderState(
+            outRd,
+            new RudderState(outRd, outTp)
+        )
+
+        let sid = this.tour.ship.shipId
+        this.tour.res.setConsumeListener((len, resume) => {
+            if(resume)
+                outShip.resumeRead(sid)
+        })
+
+        let errShip = new CgiStdErrShip();
+        let errTp = new PlainTransporter(agt.netMultiplexer, errShip, false, bufsize, false);
+        errTp.init()
+        errShip.initStdErr(errRd, this.tour.ship.agentId, this)
+
+        mpx.addRudderState(
+            errRd,
+            new RudderState(errRd, errTp)
+        )
+
+        mpx.reqRead(outRd)
+        mpx.reqRead(errRd)
+
+
         this.access()
     }
 
@@ -141,7 +222,8 @@ export class CgiReqContentHandler implements ReqContentHandler{
         if(!this.isClosed() || !this.isExited())
             return
 
-        let tourId = this.tour.id()
+        let agtId = this.tour.ship.agentId
+
         try {
             BayLog.trace(this.tour + " CGITask: process ended");
 
@@ -165,6 +247,13 @@ export class CgiReqContentHandler implements ReqContentHandler{
                 BayLog.debug_e(e)
             else
                 BayLog.error_e(e);
+        }
+
+        this.cgiDocker.subProcessCount()
+        if(this.cgiDocker.getWaitCount() > 0) {
+            BayLog.warn("agt#%d Catch up postponed process: process wait count=%d", agtId, this.cgiDocker.getWaitCount());
+            let agt = GrandAgent.get(agtId);
+            agt.reqCatchUp();
         }
 
         this.finished = true

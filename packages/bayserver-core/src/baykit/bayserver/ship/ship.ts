@@ -19,8 +19,8 @@ export abstract class Ship implements Reusable{
     agentId: number;
     rudder: Rudder;
     transporter: Transporter
-    initialized: boolean;
-    keeping: boolean;
+    initialized: boolean = false;
+    keeping: boolean = false;
 
     constructor() {
         this.objectId = Ship.oidCounter.next();
