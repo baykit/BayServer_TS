@@ -15,7 +15,7 @@ export class ServerRudder extends Rudder {
         this.server.on('close', (hasError: boolean) => {
             try {
                 if(this.closeHandler != null)
-                    this.closeHandler(hasError)
+                    this.closeHandler()
             }
             catch(e) {
                 BayLog.fatal_e(e, "%s Cannot handle exception!!", this)
