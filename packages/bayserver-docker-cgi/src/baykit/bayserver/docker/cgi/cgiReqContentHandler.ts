@@ -21,18 +21,19 @@ import {CgiStdErrShip} from "./cgiStdErrShip";
 
 export class CgiReqContentHandler implements ReqContentHandler, Postpone {
 
-    readonly cgiDocker: CgiDocker;
-    readonly tour: Tour;
-    readonly tourId: number;
-    available: boolean;
+    private readonly cgiDocker: CgiDocker;
+    private readonly tour: Tour;
+    private readonly tourId: number;
+    private available: boolean;
     childProcess: ChildProcess;
-    isStdOutClosed: boolean;
-    isStdErrClosed: boolean;
+    private isStdOutClosed: boolean;
+    private isStdErrClosed: boolean;
     private finished: boolean = false;
     private exitCode: number = null
     private execError: Error = null
     private lastAccess: number
-    env: {[key: string]: string}
+    private readonly env: {[key: string]: string}
+    private buffers: [Buffer, ContentConsumeListener][] = []
 
     constructor(cgiDocker: CgiDocker, tour: Tour, env: {[key: string]: string}) {
         this.cgiDocker = cgiDocker;
@@ -51,14 +52,15 @@ export class CgiReqContentHandler implements ReqContentHandler, Postpone {
 
     onReadReqContent(tur: Tour, buf: Buffer, start: number, len: number, lis: ContentConsumeListener): void {
         BayLog.debug("%s CGI:onReadReqContent: len=%d", tur, len);
-        this.childProcess.stdin.write(buf.subarray(start, start + len), (err) => {
-            if(err) {
-                BayLog.error_e(err, "Process write error")
-                tur.req.abort()
-            }
-            else
-                tur.req.consumed(Tour.TOUR_ID_NOCHECK, len, lis);
-        });
+        if(this.childProcess != null) {
+            this.writeToStdIn(tur, buf, start, len , lis)
+        }
+        else {
+            // postponed
+            let newBuf = Buffer.alloc(3);
+            buf.copy(newBuf, 0, start, len);
+            this.buffers.push([newBuf, lis]);
+        }
         this.access()
     }
 
@@ -133,6 +135,10 @@ export class CgiReqContentHandler implements ReqContentHandler, Postpone {
         })
         this.childProcess.on("spawn", () => {
             BayLog.debug("%s Process spawned: pid=%s", this.tour, this.childProcess.pid)
+            for(const [buf, lis] of this.buffers) {
+                BayLog.debug("%s write postponed data: len=%d", this.tour, buf.length);
+                this.writeToStdIn(this.tour, buf, 0, buf.length, lis);
+            }
         })
 
         this.isStdOutClosed = false;
@@ -213,7 +219,18 @@ export class CgiReqContentHandler implements ReqContentHandler, Postpone {
         return durationSec > this.cgiDocker.timeoutSec
     }
 
-    private processFinished() {
+    private writeToStdIn(tur: Tour, buf: Buffer, start: number, len: number, lis: ContentConsumeListener): void {
+        this.childProcess.stdin.write(buf.subarray(start, start + len), (err) => {
+            if(err) {
+                BayLog.error_e(err, "Process write error")
+                tur.req.abort()
+            }
+            else
+                tur.req.consumed(Tour.TOUR_ID_NOCHECK, len, lis);
+        });
+    }
+
+    private processFinished(): void {
         BayLog.debug("%s CGI Process finished (done=%s closed=%s exited=%s", this.tour, this.finished, this.isClosed(), this.isExited());
 
         if(this.finished)
