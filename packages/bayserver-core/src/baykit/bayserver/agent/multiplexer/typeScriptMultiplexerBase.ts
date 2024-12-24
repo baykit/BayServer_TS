@@ -63,7 +63,7 @@ export abstract class TypeScriptMultiplexerBase extends MultiplexerBase implemen
         let st = this.getRudderState(rd)
         BayLog.debug("%s reqWrite: rd=%s st=%s len=%d", this.agent, rd, st, buf.length);
         if(st == null || st.closing) {
-            BayLog.warn("%s Rudder is closed: %s", this.agent, rd)
+            BayLog.debug("%s Rudder is closed: %s", this.agent, rd)
             listener()
             return
         }
