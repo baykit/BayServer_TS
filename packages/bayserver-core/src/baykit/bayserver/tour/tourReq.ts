@@ -9,6 +9,8 @@ import {BayServer} from "../bayserver";
 import {Reusable} from "../util/Reusable";
 import {BayMessage} from "../bayMessage";
 import {Symbol} from "../symbol";
+import {HttpException} from "../httpException";
+import {HttpStatus} from "../util/httpStatus";
 
 export type RemoteHostResolver = () => string
 export class TourReq implements Reusable {
@@ -131,8 +133,13 @@ export class TourReq implements Reusable {
         this.tour.checkTourId(checkId);
 
         let dataPassed = false
-        if(!this.tour.isRunning()) {
-            BayLog.debug("%s tour is not running.", this.tour);
+
+        if(this.tour.error != null)
+            // If has error, only read content. (Do not call content handler)
+            BayLog.debug("%s tour has error.", this.tour)
+
+        else if(!this.tour.isReading()) {
+            throw new HttpException(HttpStatus.BAD_REQUEST, "%s tour is not reading.", this.tour)
         }
 
         else if (this.tour.req.contentHandler == null) {
@@ -146,10 +153,6 @@ export class TourReq implements Reusable {
                     this.bytesPosted + len,
                     this.bytesLimit))
         }
-
-        else if(this.tour.error != null)
-            // If has error, only read content. (Do not call content handler)
-            BayLog.debug("%s tour has error.", this.tour)
 
         else {
             this.contentHandler.onReadReqContent(this.tour, data, start, len, lis);
@@ -180,12 +183,14 @@ export class TourReq implements Reusable {
         if (this.ended)
             throw new Sink(this.tour + " Request content is already ended");
 
+        this.tour.changeState(Tour.TOUR_ID_NOCHECK, Tour.STATE_RUNNING)
+        this.ended = true;
+
         if (this.bytesLimit >= 0 && this.bytesPosted != this.bytesLimit) {
-            throw new ProtocolException("nvalid request data length: " + this.bytesPosted + "/" + this.bytesLimit);
+            throw new ProtocolException("Invalid request data length: " + this.bytesPosted + "/" + this.bytesLimit);
         }
         if (this.contentHandler != null)
             this.contentHandler.onEndReqContent(this.tour);
-        this.ended = true;
     }
 
     consumed(checkId: number, length: number, lis: ContentConsumeListener) {

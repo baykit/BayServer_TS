@@ -18,10 +18,11 @@ export class Tour implements Reusable{
 
     static readonly STATE_UNINITIALIZED: number = 0;
     static readonly STATE_PREPARING: number = 1;
-    static readonly STATE_RUNNING: number = 2;
-    static readonly STATE_ABORTED: number = 3;
-    static readonly STATE_ENDED: number = 4;
-    static readonly STATE_ZOMBIE : number= 5;
+    static readonly STATE_READING: number = 2;
+    static readonly STATE_RUNNING: number = 3;
+    static readonly STATE_ABORTED: number = 4;
+    static readonly STATE_ENDED: number = 5;
+    static readonly STATE_ZOMBIE : number= 6;
 
     static readonly TOUR_ID_NOCHECK: number = -1;
     static readonly INVALID_TOUR_ID: number = 0;
@@ -105,7 +106,12 @@ export class Tour implements Reusable{
         if(city == null)
             city = BayServer.findCity(this.req.reqHost);
 
-        this.changeState(Tour.TOUR_ID_NOCHECK, Tour.STATE_RUNNING);
+        if(this.req.headers.contentLength() > 0) {
+            this.changeState(Tour.TOUR_ID_NOCHECK, Tour.STATE_READING);
+        }
+        else {
+            this.changeState(Tour.TOUR_ID_NOCHECK, Tour.STATE_RUNNING);
+        }
 
         BayLog.debug("%s GO TOUR! ...( ^_^)/: city=%s url=%s", this, this.req.reqHost, this.req.uri);
 
@@ -129,11 +135,15 @@ export class Tour implements Reusable{
     }
 
     isValid(): boolean {
-        return this.state == Tour.STATE_PREPARING || this.state == Tour.STATE_RUNNING;
+        return this.state == Tour.STATE_PREPARING || this.state == Tour.STATE_READING || this.state == Tour.STATE_RUNNING;
     }
 
     isPreparing(): boolean {
         return this.state == Tour.STATE_PREPARING;
+    }
+
+    isReading(): boolean {
+        return this.state == Tour.STATE_READING;
     }
 
     isRunning(): boolean {
