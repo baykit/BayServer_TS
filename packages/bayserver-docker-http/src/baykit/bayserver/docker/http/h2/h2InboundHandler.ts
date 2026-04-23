@@ -25,6 +25,7 @@ import {NextSocketAction} from "bayserver-core/baykit/bayserver/agent/nextSocket
 import {BayMessage} from "bayserver-core/baykit/bayserver/bayMessage";
 import {Symbol} from "bayserver-core/baykit/bayserver/symbol";
 import {HttpStatus} from "bayserver-core/baykit/bayserver/util/httpStatus";
+import {HttpException} from "bayserver-core/baykit/bayserver/httpException";
 import {HeaderBlock} from "./headerBlock";
 import {CmdWindowUpdate} from "./command/cmdWindowUpdate";
 import {ReqContentHandlerUtil} from "bayserver-core/baykit/bayserver/tour/reqContentHandler";
@@ -176,7 +177,7 @@ export class H2InboundHandler implements H2Handler, InboundHandler {
         this.protocolHandler.post(cmd, lis);
     }
 
-    sendEndTour(tur: Tour, keepAlive: boolean, lis: DataConsumeListener) {
+    sendEndTour(tur: Tour, lis: DataConsumeListener) {
         let cmd = new CmdData(tur.req.key, null);
         cmd.flags.setEndStream(true);
         this.protocolHandler.post(cmd, lis);
@@ -307,6 +308,10 @@ export class H2InboundHandler implements H2Handler, InboundHandler {
         }
 
         try {
+            if(tur.req.uri == null) {
+                throw new HttpException(HttpStatus.BAD_REQUEST, "Missing uri");
+            }
+
             this.startTour(tur);
             if (tur.req.headers.contentLength() <= 0) {
                 this.endReqContent(tur.id(), tur);

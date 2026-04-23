@@ -124,9 +124,9 @@ export class FcgInboundHandler implements InboundHandler, FcgHandler {
         this.protocolHandler.post(cmd, lis);
     }
 
-    sendEndTour(tur: Tour, keepAlive: boolean, lis: DataConsumeListener): void {
+    sendEndTour(tur: Tour, lis: DataConsumeListener): void {
 
-        BayLog.debug("%s PH:endTour: tur=%s keep=%s", this.ship(), tur, keepAlive);
+        BayLog.debug("%s PH:endTour: tur=%s", this.ship(), tur);
 
         // Send empty stdout command
         let cmd: FcgCommand = new CmdStdOut(tur.req.key);
@@ -136,20 +136,18 @@ export class FcgInboundHandler implements InboundHandler, FcgHandler {
         cmd = new CmdEndRequest(tur.req.key);
         let ensureFunc = () => {
             // DO NOT close socket by FCGI server
-            //if(!keepAlive)
-            //    this.ship().postClose();
         };
 
         try {
             this.protocolHandler.post(cmd, () => {
-                BayLog.debug("%s call back in sendEndTour: tur=%s keep=%b", this.ship(), tur, keepAlive);
+                BayLog.debug("%s call back in sendEndTour: tur=%s", this.ship(), tur);
                 ensureFunc();
                 lis();
             });
         }
         catch(e) {
             if(e instanceof IOException) {
-                BayLog.debug("%s post faile in sendEndTour: tur=%s keep=%b", this.ship(), tur, keepAlive);
+                BayLog.debug("%s post faile in sendEndTour: tur=%s", this.ship(), tur);
                 ensureFunc();
             }
             throw e;

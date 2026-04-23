@@ -22,7 +22,7 @@ export interface InboundHandler {
     /**
      * Send end of contents to client.
      */
-    sendEndTour(tur: Tour, keepAlive: boolean, lis: DataConsumeListener);
+    sendEndTour(tur: Tour, lis: DataConsumeListener);
 
 
 }

@@ -250,20 +250,8 @@ export class InboundShip extends Ship {
         if(!tur.isValid()) {
             throw new Sink("Tour is not valid");
         }
-        let keepAlive = false;
-        if (tur.req.headers.getConnection() == HttpHeaders.CONNECTION_KEEP_ALIVE)
-            keepAlive = true;
-        if(keepAlive) {
-            let resConn = tur.res.headers.getConnection();
-            keepAlive = (resConn == HttpHeaders.CONNECTION_KEEP_ALIVE)
-                || (resConn == HttpHeaders.CONNECTION_UNKOWN);
-            if (keepAlive) {
-                if (tur.res.headers.contentLength() < 0)
-                    keepAlive = false;
-            }
-        }
 
-        this.tourHandler().sendEndTour(tur, keepAlive, callback);
+        this.tourHandler().sendEndTour(tur, callback);
     }
 
     sendError(chkId: number, tur: Tour, status: number, message: string, e: Error) {

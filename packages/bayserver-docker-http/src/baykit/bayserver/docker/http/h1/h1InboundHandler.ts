@@ -107,13 +107,15 @@ export class H1InboundHandler implements H1Handler, InboundHandler {
         var resCon: string;
 
         // determine Connection header value
-        if(tur.req.headers.getConnection() != HttpHeaders.CONNECTION_KEEP_ALIVE)
+        if(tur.req.headers.getConnection() != HttpHeaders.CONNECTION_KEEP_ALIVE
+                && tur.req.headers.getConnection() != HttpHeaders.CONNECTION_UNKOWN)
             // If client doesn't support "Keep-Alive", set "Close"
             resCon = "Close";
         else {
             resCon = "Keep-Alive";
             // Client supports "Keep-Alive"
-            if (tur.res.headers.getConnection() != HttpHeaders.CONNECTION_KEEP_ALIVE) {
+            if (tur.res.headers.getConnection() != HttpHeaders.CONNECTION_KEEP_ALIVE
+                    && tur.res.headers.getConnection() != HttpHeaders.CONNECTION_UNKOWN) {
                 // If tour doesn't need "Keep-Alive"
                 if (tur.res.headers.contentLength() == -1) {
                     // If content-length not specified
@@ -145,8 +147,9 @@ export class H1InboundHandler implements H1Handler, InboundHandler {
         this.protocolHandler.post(cmd, lis);
     }
 
-    sendEndTour(tur: Tour, keepAlive: boolean, lis: DataConsumeListener) {
+    sendEndTour(tur: Tour, lis: DataConsumeListener) {
         let sip = this.ship()
+        let keepAlive = tur.res.headers.getConnection() == HttpHeaders.CONNECTION_KEEP_ALIVE;
         BayLog.trace("%s sendEndTour: tur=%s keep=%s", sip, tur, keepAlive);
 
         // Send end request command

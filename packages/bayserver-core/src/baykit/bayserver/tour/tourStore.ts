@@ -21,7 +21,7 @@ class AgentListener implements LifeCycleListener {
 
 export class TourStore {
 
-    static MAX_TOURS: number = 128;
+    static MAX_TOURS: number = 12800;
 
     private freeTours: Tour[] = [];
     private activeTourMap: Map<BigInt, Tour>

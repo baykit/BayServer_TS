@@ -89,6 +89,9 @@ export class HttpUtil {
 
 
     static checkUri(uri: string): void {
+        if(uri == null)
+            throw new ProtocolException("path is null")
+
         if(uri.indexOf('\0') !== -1)
             throw new ProtocolException("path contains null byte")
 

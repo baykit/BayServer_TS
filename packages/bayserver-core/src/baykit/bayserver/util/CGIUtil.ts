@@ -124,8 +124,12 @@ export class CGIUtil {
             }
         }
 
-        this.addEnv(lis, this.REMOTE_ADDR, tour.req.remoteAddress);
-        this.addEnv(lis, this.REMOTE_PORT, tour.req.remotePort.toString());
+        if(tour.req.remoteAddress != null) {
+            this.addEnv(lis, this.REMOTE_ADDR, tour.req.remoteAddress);
+        }
+        if(tour.req.remotePort >= 0) {
+            this.addEnv(lis, this.REMOTE_PORT, tour.req.remotePort.toString());
+        }
         //addEnv(map, REMOTE_USER, "unknown");
 
         this.addEnv(lis, this.REQUEST_SCHEME, tour.isSecure ? "https": "http");

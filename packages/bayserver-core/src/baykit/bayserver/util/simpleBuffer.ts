@@ -18,7 +18,7 @@ export class SimpleBuffer implements Reusable{
     //////////////////////////////////////////////////////
 
     reset() {
-        this.buf.fill(0)
+        //this.buf.fill(0)
         this.len = 0
     }
 

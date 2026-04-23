@@ -17,7 +17,7 @@ export interface TourHandler {
     /**
      * Send end of req contents to client.
      */
-    sendEndTour(tur: Tour, keepAlive: boolean, lis: DataConsumeListener): void
+    sendEndTour(tur: Tour, lis: DataConsumeListener): void
 
     /**
      * Send protocol error to client

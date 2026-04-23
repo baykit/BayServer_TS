@@ -112,26 +112,26 @@ export class AjpInboundHandler implements InboundHandler, AjpHandler {
         this.protocolHandler.post(cmd, lis);
     }
 
-    sendEndTour(tur: Tour, keepAlive: boolean, lis: DataConsumeListener): void {
-        BayLog.debug(this.ship() + " endTour: tur=" + tur + " keep=" + keepAlive);
+    sendEndTour(tur: Tour, lis: DataConsumeListener): void {
+        BayLog.debug("%s endTour: tur=%s", this.ship(), tur);
         let cmd = new CmdEndResponse();
-        cmd.reuse = keepAlive;
+        cmd.reuse = true;  // Always reuse connection
 
         let ensureFunc = () => {
-            if (!keepAlive)
+            if (!cmd.reuse)
                 this.ship().postClose();
         };
 
         try {
             this.protocolHandler.post(cmd, () => {
-                BayLog.debug(this.ship() + " call back in sendEndTour: tur=" + tur + " keep=" + keepAlive);
+                BayLog.debug("%s call back in sendEndTour: tur=%s", this.ship(), tur);
                 ensureFunc();
                 lis();
             });
         }
         catch(e) {
             if(e instanceof IOException) {
-                BayLog.debug(this.ship() + " post failed in sendEndTour: tur=" + tur + " keep=" + keepAlive);
+                BayLog.debug("%s post failed in sendEndTour: tur=%s", this.ship(), tur);
                 ensureFunc();
             }
             throw e;
