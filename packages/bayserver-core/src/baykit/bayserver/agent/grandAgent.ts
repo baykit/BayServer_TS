@@ -67,6 +67,7 @@ export class GrandAgent {
     maxInboundShips: number
     aborted: boolean = false
     anchorable: boolean;
+    private busy: boolean = false;
 
     private timerHandlers: TimerHandler[] = []
     private timerId: NodeJS.Timeout | null = null;
@@ -129,18 +130,8 @@ export class GrandAgent {
             }
 
 
-            let busy = true
+            this.netMultiplexer.onFree();
             while (true) {
-                let testBusy = this.netMultiplexer.isBusy();
-                if (testBusy != busy) {
-                    busy = testBusy;
-                    if (busy) {
-                        this.netMultiplexer.onBusy();
-                    } else {
-                        this.netMultiplexer.onFree();
-                    }
-                }
-
                 await this.recipient.receive(true);
 
                 //BayLog.debug("selected: %d", count);
@@ -410,6 +401,8 @@ export class GrandAgent {
     }
 
     private onAccepted(letter: AcceptedLetter, st: RudderState) {
+        BayLog.debug("%s onAccepted rd=%s", this, st.rudder);
+
         try {
             let p = BayServer.findAnchorablePort(st.rudder)
             p.onConnected(this.agentId, letter.clientRudder, st.rudder)
@@ -427,8 +420,13 @@ export class GrandAgent {
                 throw e
         }
 
-        if(!this.netMultiplexer.isBusy()) {
-            st.multiplexer.nextAccept(st)
+        if(this.netMultiplexer.isBusy()) {
+            BayLog.warn("%s net multiplexer is busy: %s", this, this.netMultiplexer);
+            this.netMultiplexer.onBusy();
+            this.busy = true;
+        }
+        else {
+            st.multiplexer.nextAccept(st);
         }
     }
 
@@ -528,11 +526,7 @@ export class GrandAgent {
     private onClosed(letter: ClosedLetter, st: RudderState) : void {
         BayLog.debug("%s closed rd=%s", this, st.rudder);
 
-        if(st.closed)
-            return;
-        st.closed = true;
-
-        this.netMultiplexer.removeRudderState(st.rudder);
+        st.multiplexer.removeRudderState(st.rudder);
 
         BayLog.trace("%s Flush buffer", this);
         while(st.multiplexer.consumeOldestUnit(st)) {
@@ -542,8 +536,13 @@ export class GrandAgent {
         if (st.transporter != null)
             st.transporter.onClosed(st.rudder);
 
-        st.closed = true
-        st.access()
+        RudderStateStore.getStore(this.agentId).Return(st);
+
+        if(this.busy && !this.netMultiplexer.isBusy()) {
+            BayLog.warn("%s net multiplexer is free: %s", this, this.netMultiplexer);
+            this.netMultiplexer.onFree();
+            this.busy = false;
+        }
     }
 
     private onError(letter: ErrorLetter, st: RudderState) {
