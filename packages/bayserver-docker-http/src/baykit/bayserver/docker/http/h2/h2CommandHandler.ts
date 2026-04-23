@@ -9,6 +9,7 @@ import {CmdWindowUpdate} from "./command/cmdWindowUpdate";
 import {CmdGoAway} from "./command/cmdGoAway";
 import {CmdPing} from "./command/cmdPing";
 import {CmdRstStream} from "./command/cmdRstStream";
+import {CmdContinuation} from "./command/cmdContinuation";
 
 export interface H2CommandHandler extends CommandHandler<H2Command>{
 
@@ -29,5 +30,6 @@ export interface H2CommandHandler extends CommandHandler<H2Command>{
     handlePing(cmd: CmdPing): number;
 
     handleRstStream(cmd: CmdRstStream): number;
-    
+
+    handleContinuation(cmd: CmdContinuation): number;
 }

@@ -50,6 +50,7 @@ export class ServerRudder extends Rudder {
     }
 
     reqClose(): void {
+        this._closed = true
         this.server.close()
     }
 

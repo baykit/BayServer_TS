@@ -4,6 +4,7 @@ import {StrUtil} from "./strUtil";
 import {BayLog} from "../bayLog";
 import {SimpleBuffer} from "./simpleBuffer";
 import {CharUtil} from "./charUtil";
+import {ProtocolException} from "../protocol/protocolException";
 
 export class HttpUtil {
     static readonly MAX_LINE_LEN: number = 5000;
@@ -87,4 +88,21 @@ export class HttpUtil {
     }
 
 
+    static checkUri(uri: string): void {
+        if(uri.indexOf('\0') !== -1)
+            throw new ProtocolException("path contains null byte")
+
+        for(let i = 0; i < uri.length; i++) {
+            let ch = uri.charCodeAt(i)
+            if(ch < 0x20 || ch === 0x7F)
+                throw new ProtocolException("path contains control character")
+        }
+    }
+
+    private static readonly TOKEN_PATTERN = /^[A-Za-z0-9!#$%&'*+\-.^_`|~]+$/
+
+    static checkMethod(method: string): void {
+        if(!HttpUtil.TOKEN_PATTERN.test(method))
+            throw new ProtocolException("Invalid method: " + method)
+    }
 }

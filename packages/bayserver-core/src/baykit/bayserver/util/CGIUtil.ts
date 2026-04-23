@@ -164,6 +164,8 @@ export class CGIUtil {
     private static addEnv(lis: AddListener, key: string, value: Object) {
         if(value == null)
             value = ""
+        if(typeof value === "string" && (value as string).indexOf('\0') !== -1)
+            throw new Error(key + " contains null byte: " + String(value))
         lis(key, value.toString())
     }
 }

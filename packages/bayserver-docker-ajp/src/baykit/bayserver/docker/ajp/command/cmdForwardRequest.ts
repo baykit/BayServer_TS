@@ -82,7 +82,10 @@ export class CmdForwardRequest extends AjpCommand {
     pack(pkt: AjpPacket) : void {
         let acc: AjpAccessor = pkt.newAjpDataAccessor();
         acc.putByte(this.type); // prefix code
-        acc.putByte(CmdForwardRequest.getMethodCode(this.method));
+        let code = CmdForwardRequest.getMethodCode(this.method)
+        if(code <= 0)
+            throw new ProtocolException("Invalid method: " + this.method)
+        acc.putByte(code);
         acc.putString(this.protocol);
         acc.putString(this.reqUri);
         acc.putString(this.remoteAddr);
@@ -101,7 +104,10 @@ export class CmdForwardRequest extends AjpCommand {
         super.unpack(pkt);
         let acc: AjpAccessor = pkt.newAjpDataAccessor();
         acc.getByte(); // prefix code
-        this.method = CmdForwardRequest.methods.get(acc.getByte());
+        let code = acc.getByte()
+        this.method = CmdForwardRequest.methods.get(code);
+        if(this.method == null)
+            throw new ProtocolException("Invalid method code: " + code)
         this.protocol = acc.getString();
         this.reqUri = acc.getString();
         this.remoteAddr = acc.getString();

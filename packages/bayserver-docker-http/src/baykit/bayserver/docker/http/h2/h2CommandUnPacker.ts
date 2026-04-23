@@ -13,6 +13,7 @@ import {CmdData} from "./command/cmdData";
 import {CmdGoAway} from "./command/cmdGoAway";
 import {CmdPing} from "./command/cmdPing";
 import {CmdRstStream} from "./command/cmdRstStream";
+import {CmdContinuation} from "./command/cmdContinuation";
 
 export class H2CommandUnPacker extends CommandUnPacker<H2Packet> {
 
@@ -69,6 +70,10 @@ export class H2CommandUnPacker extends CommandUnPacker<H2Packet> {
 
             case H2Type.RST_STREAM:
                 cmd = new CmdRstStream(pkt.streamId);
+                break;
+
+            case H2Type.CONTINUATION:
+                cmd = new CmdContinuation(pkt.streamId, pkt.flags);
                 break;
 
             default:

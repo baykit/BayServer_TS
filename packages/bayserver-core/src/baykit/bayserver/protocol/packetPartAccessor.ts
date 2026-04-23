@@ -1,6 +1,6 @@
 import {Packet} from "./packet";
 import {Buffer} from "buffer";
-import {Sink} from "../sink";
+import {IOException} from "../util/ioException";
 
 export class PacketPartAccessor {
 
@@ -83,12 +83,12 @@ export class PacketPartAccessor {
     public checkRead(len: number): void {
         let maxLen = (this.maxLen >= 0) ? this.maxLen : this.packet.bufLen - this.start
         if (this.pos + len > maxLen)
-            throw new Sink("Invalid index");
+            throw new IOException();
     }
 
     public checkWrite(len: number): void {
         if (this.maxLen > 0 && this.pos + len > this.maxLen)
-            throw new Sink("Buffer overflow");
+            throw new IOException("Buffer overflow");
     }
 
     public forward(len: number) {

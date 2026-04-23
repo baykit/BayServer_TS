@@ -76,6 +76,7 @@ export class ReadableRudder extends Rudder {
     }
 
     reqClose(): void {
+        this._closed = true
         this.readable.destroy() // 'close' event will occur
     }
 }

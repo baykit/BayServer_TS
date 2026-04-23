@@ -550,7 +550,10 @@ export class GrandAgent {
             throw letter.err
         } catch (e) {
             if (e instanceof IOException) {
-                st.transporter.onError(st.rudder, e)
+                if (st.transporter != null)
+                    st.transporter.onError(st.rudder, e)
+                else
+                    BayLog.error_e(e, "%s onError error=%s", this, e)
                 this.nextAction(st, NextSocketAction.CLOSE, false)
             } else
                 throw e

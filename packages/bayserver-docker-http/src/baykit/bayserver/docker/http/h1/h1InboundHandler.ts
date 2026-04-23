@@ -182,7 +182,7 @@ export class H1InboundHandler implements H1Handler, InboundHandler {
             tur = this.curTour;
 
         tur.res.sendError(Tour.TOUR_ID_NOCHECK, HttpStatus.BAD_REQUEST, null, e);
-        return true;
+        return false;
     }
 
     //////////////////////////////////////////////////////
@@ -239,6 +239,7 @@ export class H1InboundHandler implements H1Handler, InboundHandler {
 
         tur.req.uri = cmd.uri
         tur.req.method = cmd.method.toUpperCase();
+        HttpUtil.checkMethod(tur.req.method);
         tur.req.protocol = protocol;
 
         if (!(tur.req.protocol == "HTTP/1.1"

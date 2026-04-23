@@ -113,8 +113,8 @@ export class TourReq implements Reusable {
     setReqContentHandler(hnd: ReqContentHandler) {
         if(hnd == null)
             throw new Error("nullPo")
-        if(this.contentHandler != null)
-            throw new Sink("content handler is already set");
+        //if(this.contentHandler != null)
+        //    throw new Sink("content handler is already set");
 
         this.contentHandler = hnd;
     }

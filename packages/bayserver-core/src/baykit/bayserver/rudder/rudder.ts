@@ -11,6 +11,7 @@ export abstract class Rudder {
     private static counter = new Counter()
 
     id: number
+    protected _closed: boolean = false
 
     protected readHandler: ReadHandler
     protected writeHandler: WriteHandler
@@ -19,6 +20,10 @@ export abstract class Rudder {
 
     protected constructor() {
         this.id = Rudder.counter.next()
+    }
+
+    closed(): boolean {
+        return this._closed
     }
 
     toString(): string {

@@ -42,6 +42,10 @@ import {H2PacketUnPacker} from "./h2PacketUnPacker";
 import {H2Handler} from "./h2Handler";
 import {InboundShip} from "bayserver-core/baykit/bayserver/common/inboundShip";
 import {Ship} from "bayserver-core/baykit/bayserver/ship/ship";
+import {SimpleBuffer} from "bayserver-core/baykit/bayserver/util/simpleBuffer";
+import {HeaderBlockRenderer} from "./headerBlockRenderer";
+import {HeaderBlockParser} from "./headerBlockParser";
+import {CmdContinuation} from "./command/cmdContinuation";
 
 
 
@@ -80,6 +84,7 @@ export class H2InboundHandler implements H2Handler, InboundHandler {
     windowSize = BayServer.harbor.getTourBufferSize()
     readonly settings = new H2Settings()
     readonly analyzer = new HeaderBlockAnalyzer()
+    readonly headerBuffer = new SimpleBuffer()
 
     constructor() {
     }
@@ -96,7 +101,7 @@ export class H2InboundHandler implements H2Handler, InboundHandler {
 
         this.reqContLen = 0;
         this.reqContRead = 0;
-
+        this.headerBuffer.reset();
     }
 
     //////////////////////////////////////////////////////
@@ -104,12 +109,12 @@ export class H2InboundHandler implements H2Handler, InboundHandler {
     //////////////////////////////////////////////////////
 
     sendResHeaders(tur: Tour) {
-        let cmd = new CmdHeaders(tur.req.key);
-
         let bld = new HeaderBlockBuilder();
 
+        let headerBlocks: HeaderBlock[] = []
+
         let blk = bld.buildHeaderBlock(":status", tur.res.headers.status.toString(), this.protocolHandler.resHeaderTbl);
-        cmd.headerBlocks.push(blk);
+        headerBlocks.push(blk);
 
         // headers
         if(BayServer.harbor.isTraceHeader())
@@ -123,17 +128,47 @@ export class H2InboundHandler implements H2Handler, InboundHandler {
                     if (BayServer.harbor.isTraceHeader())
                         BayLog.info("%s H2 res header: %s=%s", tur, name, value);
                     blk = bld.buildHeaderBlock(name, value, this.protocolHandler.resHeaderTbl);
-                    cmd.headerBlocks.push(blk);
+                    headerBlocks.push(blk);
                 }
             }
         }
 
-        cmd.flags.setEndHeaders(true);
-        cmd.excluded = false;
-        // cmd.streamDependency = streamId;
-        cmd.flags.setPadded(false);
+        let buf = new SimpleBuffer()
+        new HeaderBlockRenderer(buf).renderHeaderBlocks(headerBlocks)
 
-        this.protocolHandler.post(cmd);
+        let pos = 0
+        let len = buf.len
+
+        while(len > 0) {
+            let chunkLen = Math.min(len, H2Packet.DEFAULT_PAYLOAD_MAXLEN)
+
+            let cmd: H2Command
+            if(pos == 0) {
+                let hcmd = new CmdHeaders(tur.req.key)
+                hcmd.excluded = false
+                hcmd.data = buf.buf
+                hcmd.start = pos
+                hcmd.length = len
+                cmd = hcmd
+            }
+            else {
+                let ccmd = new CmdContinuation(tur.req.key)
+                ccmd.data = buf.buf
+                ccmd.start = pos
+                ccmd.length = len
+                cmd = ccmd
+            }
+
+            cmd.flags.setPadded(false)
+
+            pos += chunkLen
+            len -= chunkLen
+            if(len == 0) {
+                cmd.flags.setEndHeaders(true)
+            }
+
+            this.protocolHandler.post(cmd)
+        }
     }
 
     sendResContent(tur: Tour, bytes: Buffer, ofs: number, len: number, lis: DataConsumeListener) {
@@ -202,7 +237,37 @@ export class H2InboundHandler implements H2Handler, InboundHandler {
             return NextSocketAction.CONTINUE;
         }
 
-        for(const blk of cmd.headerBlocks) {
+        if(cmd.flags.endHeaders()) {
+            return this.onEndHeader(tur, cmd.data, cmd.start, cmd.length);
+        }
+        else {
+            let chunk = Buffer.alloc(cmd.length)
+            cmd.data.copy(chunk, 0, cmd.start, cmd.start + cmd.length)
+            this.headerBuffer.put(chunk)
+        }
+        return NextSocketAction.CONTINUE;
+    }
+
+    handleContinuation(cmd: CmdContinuation): number {
+        let tur = this.getTour(cmd.streamId);
+        if(tur == null) {
+            throw new Error("Invalid stream id: " + cmd.streamId);
+        }
+
+        let chunk = Buffer.alloc(cmd.length)
+        cmd.data.copy(chunk, 0, cmd.start, cmd.start + cmd.length)
+        this.headerBuffer.put(chunk)
+        if(cmd.flags.endHeaders()) {
+            return this.onEndHeader(tur, this.headerBuffer.buf, 0, this.headerBuffer.len);
+        }
+        return NextSocketAction.CONTINUE;
+    }
+
+    private onEndHeader(tur: Tour, buf: Buffer, start: number, len: number): number {
+        let sip = this.ship()
+        let headerBlocks = new HeaderBlockParser(buf, start, len).parseHeaderBlocks()
+
+        for(const blk of headerBlocks) {
             if(blk.op == HeaderBlock.UPDATE_DYNAMIC_TABLE_SIZE) {
                 BayLog.trace("%s header block update table size: %d", tur, blk.size);
                 this.protocolHandler.reqHeaderTbl.setSize(blk.size);
@@ -231,36 +296,33 @@ export class H2InboundHandler implements H2Handler, InboundHandler {
             }
         }
 
-        if (cmd.flags.endHeaders()) {
-            tur.req.protocol = "HTTP/2.0";
-            BayLog.debug("%s H2 read header method=%s protocol=%s uri=%s contlen=%d",
-                sip, tur.req.method, tur.req.protocol, tur.req.uri, tur.req.headers.contentLength());
+        tur.req.protocol = "HTTP/2.0";
+        BayLog.debug("%s H2 read header method=%s protocol=%s uri=%s contlen=%d",
+            sip, tur.req.method, tur.req.protocol, tur.req.uri, tur.req.headers.contentLength());
 
-            let reqContLen = tur.req.headers.contentLength();
+        let reqContLen = tur.req.headers.contentLength();
 
-            if(reqContLen > 0) {
-                tur.req.setLimit(reqContLen)
+        if(reqContLen > 0) {
+            tur.req.setLimit(reqContLen)
+        }
+
+        try {
+            this.startTour(tur);
+            if (tur.req.headers.contentLength() <= 0) {
+                this.endReqContent(tur.id(), tur);
             }
-
-            try {
-                this.startTour(tur);
-                if (tur.req.headers.contentLength() <= 0) {
-                    this.endReqContent(tur.id(), tur);
-                }
-            } catch (e) {
-                BayLog.debug("%s Http error occurred: %s", this, e);
-                if(reqContLen <= 0) {
-                    // no post data
-                    tur.res.sendHttpException(Tour.TOUR_ID_NOCHECK, e);
-
-                    return NextSocketAction.CONTINUE;
-                }
-                else {
-                    // Delay send
-                    tur.error = e;
-                    tur.req.setReqContentHandler(ReqContentHandlerUtil.devNull);
-                    return NextSocketAction.CONTINUE;
-                }
+        } catch (e) {
+            BayLog.debug("%s Http error occurred: %s", this, e);
+            if(reqContLen <= 0) {
+                // no post data
+                tur.res.sendHttpException(Tour.TOUR_ID_NOCHECK, e);
+                return NextSocketAction.CONTINUE;
+            }
+            else {
+                // Delay send
+                tur.error = e;
+                tur.req.setReqContentHandler(ReqContentHandlerUtil.devNull);
+                return NextSocketAction.CONTINUE;
             }
         }
         return NextSocketAction.CONTINUE;
@@ -271,9 +333,6 @@ export class H2InboundHandler implements H2Handler, InboundHandler {
         let tur = this.getTour(cmd.streamId);
         if(tur == null) {
             throw new Error("Invalid stream id: " + cmd.streamId);
-        }
-        if(tur.req.headers.contentLength() <= 0) {
-            throw new ProtocolException("Post content not allowed");
         }
 
         let success = true;

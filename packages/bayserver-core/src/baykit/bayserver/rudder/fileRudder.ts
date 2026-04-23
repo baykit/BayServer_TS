@@ -49,6 +49,7 @@ export class FileRudder extends Rudder {
     }
 
     reqClose(): void {
+        this._closed = true
         fs.close(this.fd, err => {
             try {
                 if(err) {
