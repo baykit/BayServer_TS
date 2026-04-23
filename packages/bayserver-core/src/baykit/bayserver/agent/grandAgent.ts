@@ -9,7 +9,7 @@ import {ArrayUtil} from "../util/arrayUtil";
 import {Multiplexer} from "../common/multiplexer";
 import {PigeonMultiplexer} from "./multiplexer/pigeonMultiplexer";
 import {Recipient} from "../common/recipient";
-import {RudderState} from "./multiplexer/rudderState";
+import {RudderState} from "../common/rudderState";
 import {RudderStateStore} from "../common/rudderStateStore";
 import {EventRecipient} from "./multiplexer/eventRecipient";
 import {BayMessage} from "../bayMessage";
@@ -166,6 +166,7 @@ export class GrandAgent {
                         BayLog.debug("%s rudder is already returned: %s", this, letter.rudder)
                         continue
                     }
+                    st.checkStateId(letter.stateId)
 
                     if(letter instanceof AcceptedLetter) {
                         this.onAccepted(letter, st)
@@ -243,40 +244,40 @@ export class GrandAgent {
         this.netMultiplexer.reqRead(this.commandReceiver.rudder)
     }
 
-    sendAcceptedLetter(rd: Rudder, mpx: Multiplexer, clientRd: Rudder, wakeup: boolean): void {
+    sendAcceptedLetter(stateId: number, rd: Rudder, mpx: Multiplexer, clientRd: Rudder, wakeup: boolean): void {
         if(rd == null)
             throw new Sink();
-        this.sendLetter(new AcceptedLetter(rd, mpx, clientRd), wakeup);
+        this.sendLetter(new AcceptedLetter(stateId, rd, mpx, clientRd), wakeup);
     }
 
-    sendConnectedLetter(rd: Rudder, mpx: Multiplexer, wakeup: boolean): void {
+    sendConnectedLetter(stateId: number, rd: Rudder, mpx: Multiplexer, wakeup: boolean): void {
         if(rd == null)
             throw new Sink();
-        this.sendLetter(new ConnectedLetter(rd, mpx), wakeup);
+        this.sendLetter(new ConnectedLetter(stateId, rd, mpx), wakeup);
     }
 
-    sendReadLetter(rd: Rudder, mpx: Multiplexer, n: number, adr: string, wakeup: boolean): void {
+    sendReadLetter(stateId: number, rd: Rudder, mpx: Multiplexer, n: number, adr: string, wakeup: boolean): void {
         if(rd == null)
             throw new Sink();
-        this.sendLetter(new ReadLetter(rd, mpx, n, adr), wakeup);
+        this.sendLetter(new ReadLetter(stateId, rd, mpx, n, adr), wakeup);
     }
 
-    sendWroteLetter(rd: Rudder, mpx: Multiplexer, n: number, wakeup: boolean): void {
+    sendWroteLetter(stateId: number, rd: Rudder, mpx: Multiplexer, n: number, wakeup: boolean): void {
         if(rd == null)
             throw new Sink();
-        this.sendLetter(new WroteLetter(rd, mpx, n), wakeup);
+        this.sendLetter(new WroteLetter(stateId, rd, mpx, n), wakeup);
     }
 
-    sendClosedLetter(rd: Rudder, mpx: Multiplexer, wakeup: boolean): void {
+    sendClosedLetter(stateId: number, rd: Rudder, mpx: Multiplexer, wakeup: boolean): void {
         if(rd == null)
             throw new Sink();
-        this.sendLetter(new ClosedLetter(rd, mpx), wakeup);
+        this.sendLetter(new ClosedLetter(stateId, rd, mpx), wakeup);
     }
 
-    sendErrorLetter(rd: Rudder, mpx: Multiplexer, e: Error, wakeup: boolean): void {
+    sendErrorLetter(stateId: number, rd: Rudder, mpx: Multiplexer, e: Error, wakeup: boolean): void {
         if(rd == null)
             throw new Sink();
-        this.sendLetter(new ErrorLetter(rd, mpx, e), wakeup);
+        this.sendLetter(new ErrorLetter(stateId, rd, mpx, e), wakeup);
     }
 
     reloadCert() {

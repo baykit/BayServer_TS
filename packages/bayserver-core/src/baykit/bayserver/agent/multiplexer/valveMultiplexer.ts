@@ -1,5 +1,5 @@
 import {TypeScriptMultiplexerBase} from "./typeScriptMultiplexerBase";
-import {RudderState} from "./rudderState";
+import {RudderState} from "../../common/rudderState";
 import {Rudder} from "../../rudder/rudder";
 import {GrandAgent} from "../grandAgent";
 import {BayLog} from "../../bayLog";
@@ -49,7 +49,7 @@ export class ValveMultiplexer extends TypeScriptMultiplexerBase {
         }
 
         let callback = () => {
-            this.agent.sendConnectedLetter(st.rudder, this, true);
+            this.agent.sendConnectedLetter(st.id, st.rudder, this, true);
         }
 
         let socket = (rd as SocketRudder).socket()

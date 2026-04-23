@@ -1,4 +1,4 @@
-import {Transporter} from "./transporter";
+import {Transporter} from "../../common/transporter";
 import {Buffer} from "buffer";
 import {Multiplexer} from "../../common/multiplexer";
 import {Ship} from "../../ship/ship";

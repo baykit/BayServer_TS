@@ -1,6 +1,6 @@
-import {Reusable} from "../../util/Reusable";
-import {Rudder} from "../../rudder/rudder";
-import {DataConsumeListener} from "../../util/dataConsumeListener";
+import {Reusable} from "../util/Reusable";
+import {Rudder} from "../rudder/rudder";
+import {DataConsumeListener} from "../util/dataConsumeListener";
 
 export interface Transporter extends Reusable {
     init(): void

@@ -3,7 +3,7 @@ import {Sink} from "../sink";
 import {ProtocolException} from "../protocol/protocolException";
 import {BayLog} from "../bayLog";
 import {Rudder} from "../rudder/rudder";
-import {Transporter} from "../agent/multiplexer/transporter";
+import {Transporter} from "./transporter";
 import {Tour} from "../tour/tour";
 
 export abstract class ReadOnlyShip extends Ship {

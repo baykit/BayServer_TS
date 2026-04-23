@@ -13,7 +13,7 @@ import {FcgWarpHandler_ProtocolHandlerFactory} from "./fcgWarpHandler";
 import {WarpBase} from "bayserver-core/baykit/bayserver/docker/base/warpBase";
 import {Rudder} from "bayserver-core/baykit/bayserver/rudder/rudder";
 import {Ship} from "bayserver-core/baykit/bayserver/ship/ship";
-import {Transporter} from "bayserver-core/baykit/bayserver/agent/multiplexer/transporter";
+import {Transporter} from "bayserver-core/baykit/bayserver/common/transporter";
 import {SocketRudder} from "bayserver-core/baykit/bayserver/rudder/socketRudder";
 import {Socket} from "net";
 

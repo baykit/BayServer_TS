@@ -1,6 +1,6 @@
 import {Rudder} from "../rudder/rudder";
-import {RudderState} from "../agent/multiplexer/rudderState";
-import {Transporter} from "../agent/multiplexer/transporter";
+import {RudderState} from "./rudderState";
+import {Transporter} from "./transporter";
 import {DataConsumeListener} from "../util/dataConsumeListener";
 import {ProtocolException} from "../protocol/protocolException";
 

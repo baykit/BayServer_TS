@@ -3,7 +3,7 @@ import {Sink} from "../sink";
 import {BayLog} from "../bayLog";
 import {Counter} from "../util/counter";
 import {Rudder} from "../rudder/rudder";
-import {Transporter} from "../agent/multiplexer/transporter";
+import {Transporter} from "../common/transporter";
 import {ProtocolException} from "../protocol/protocolException";
 
 export abstract class Ship implements Reusable{

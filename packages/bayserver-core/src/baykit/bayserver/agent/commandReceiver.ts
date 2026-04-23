@@ -3,7 +3,7 @@ import {BayLog} from "../bayLog";
 import {IOException} from "../util/ioException";
 import {IOUtil} from "../util/ioUtil";
 import {Ship} from "../ship/ship";
-import {Transporter} from "./multiplexer/transporter";
+import {Transporter} from "../common/transporter";
 import {Rudder} from "../rudder/rudder";
 import {SocketRudder} from "../rudder/socketRudder";
 import {Sink} from "../sink";

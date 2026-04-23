@@ -15,7 +15,7 @@ import {PlainTransporter} from "bayserver-core/baykit/bayserver/agent/multiplexe
 import {ReadableRudder} from "bayserver-core/baykit/bayserver/rudder/readableRudder";
 import {GrandAgent} from "bayserver-core/baykit/bayserver/agent/grandAgent";
 import {Multiplexer} from "bayserver-core/baykit/bayserver/common/multiplexer";
-import {RudderState} from "bayserver-core/baykit/bayserver/agent/multiplexer/rudderState";
+import {RudderState} from "bayserver-core/baykit/bayserver/common/rudderState";
 import {MULTIPLEXER_TYPE_PIGEON, MULTIPLEXER_TYPE_VALVE} from "bayserver-core/baykit/bayserver/docker/harbor";
 import {Sink} from "bayserver-core/baykit/bayserver/sink";
 

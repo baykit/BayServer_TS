@@ -1,10 +1,16 @@
-import {Rudder} from "../../rudder/rudder";
+import {Rudder} from "../rudder/rudder";
 import {Transporter} from "./transporter";
-import {Multiplexer} from "../../common/multiplexer";
-import {WriteUnit} from "./writeUnit";
-import {Reusable} from "../../util/Reusable";
+import {Multiplexer} from "./multiplexer";
+import {WriteUnit} from "../agent/multiplexer/writeUnit";
+import {Reusable} from "../util/Reusable";
+import {Counter} from "../util/counter";
+import {Sink} from "../sink";
 
 export class RudderState implements Reusable {
+    static readonly STATE_ID_NOCHECK: number = -1;
+    private static idCounter: Counter = new Counter()
+
+    id: number
     rudder: Rudder
     transporter: Transporter
     multiplexer: Multiplexer
@@ -30,6 +36,7 @@ export class RudderState implements Reusable {
     init(rd: Rudder, tp: Transporter = null, timeoutSec: number = 0): void {
         if (rd == null)
             throw new Error("nullPo");
+        this.id = RudderState.idCounter.next()
         this.rudder = rd
         this.transporter = tp
         this.closed = false
@@ -43,6 +50,7 @@ export class RudderState implements Reusable {
     }
 
     reset(): void {
+        this.id = 0
         this.rudder = null
         this.transporter = null
         this.multiplexer = null
@@ -60,7 +68,7 @@ export class RudderState implements Reusable {
     }
 
     toString(): string {
-        let s = "st(rd=" + this.rudder + " mpx=" + this.multiplexer + " tp=" + this.transporter + ")"
+        let s = "st(id=" + this.id + " rd=" + this.rudder + " mpx=" + this.multiplexer + " tp=" + this.transporter + ")"
 
         if(this.closing)
             s += " closing"
@@ -72,4 +80,11 @@ export class RudderState implements Reusable {
         this.lastAccessTime = Date.now()
     }
 
+    checkStateId(checkId: number): void {
+        if(checkId == RudderState.STATE_ID_NOCHECK)
+            return
+        if(checkId != this.id) {
+            throw new Sink("%s Invalid state id : %d", this, checkId)
+        }
+    }
 }

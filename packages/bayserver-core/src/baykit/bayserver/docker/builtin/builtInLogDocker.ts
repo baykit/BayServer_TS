@@ -31,7 +31,7 @@ import {Rudder} from "../../rudder/rudder";
 import {MULTIPLEXER_TYPE_PIGEON} from "../harbor";
 import {FileRudder} from "../../rudder/fileRudder";
 import {Sink} from "../../sink";
-import {RudderState} from "../../agent/multiplexer/rudderState";
+import {RudderState} from "../../common/rudderState";
 import {RudderStateStore} from "../../common/rudderStateStore";
 import {statSync} from "fs";
 

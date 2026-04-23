@@ -13,7 +13,7 @@ import {ProtocolHandlerStore} from "bayserver-core/baykit/bayserver/protocol/pro
 import {H1WarpHandler_ProtocolHandlerFactory} from "./h1/h1WarpHandler";
 import {Rudder} from "bayserver-core/baykit/bayserver/rudder/rudder";
 import {Ship} from "bayserver-core/baykit/bayserver/ship/ship";
-import {Transporter} from "bayserver-core/baykit/bayserver/agent/multiplexer/transporter";
+import {Transporter} from "bayserver-core/baykit/bayserver/common/transporter";
 import {SocketRudder} from "bayserver-core/baykit/bayserver/rudder/socketRudder";
 import {Socket} from "net";
 import {Sink} from "bayserver-core/baykit/bayserver/sink";

@@ -16,7 +16,7 @@ import * as tls from "tls";
 import {SecureTransporter} from "../../agent/multiplexer/secureTransporter";
 import * as net from "net";
 import {Ship} from "../../ship/ship";
-import {Transporter} from "../../agent/multiplexer/transporter";
+import {Transporter} from "../../common/transporter";
 import {GrandAgent} from "../../agent/grandAgent";
 
 export class BuiltInSecureDocker extends DockerBase implements Secure{

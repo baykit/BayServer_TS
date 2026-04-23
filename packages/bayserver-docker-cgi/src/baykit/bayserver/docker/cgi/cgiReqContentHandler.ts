@@ -16,7 +16,7 @@ import {MULTIPLEXER_TYPE_VALVE} from "bayserver-core/baykit/bayserver/docker/har
 import {Sink} from "bayserver-core/baykit/bayserver/sink";
 import {CgiStdOutShip} from "./cgiStdOutShip";
 import {PlainTransporter} from "bayserver-core/baykit/bayserver/agent/multiplexer/plainTransporter";
-import {RudderState} from "bayserver-core/baykit/bayserver/agent/multiplexer/rudderState";
+import {RudderState} from "bayserver-core/baykit/bayserver/common/rudderState";
 import {RudderStateStore} from "bayserver-core/baykit/bayserver/common/rudderStateStore";
 import {CgiStdErrShip} from "./cgiStdErrShip";
 

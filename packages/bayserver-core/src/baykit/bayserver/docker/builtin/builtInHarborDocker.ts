@@ -40,6 +40,9 @@ export class BuiltInHarborDocker extends DockerBase implements Harbor {
     static readonly DEFAULT_MULTI_CORE: boolean = true;
     static readonly DEFAULT_GZIP_COMP: boolean = false;
     static readonly DEFAULT_PID_FILE: string = "bayserver.pid";
+    static readonly DEFAULT_ENABLE_CACHE: boolean = false;
+    static readonly DEFAULT_CACHE_LIFESPAN_SEC: number = 60;
+    static readonly DEFAULT_CACHE_SIZE_MB: number = 32;
 
     charset: string = BuiltInHarborDocker.DEFAULT_CHARSET;
     controlPort: number = BuiltInHarborDocker.DEFAULT_CONTROL_PORT;
@@ -62,6 +65,9 @@ export class BuiltInHarborDocker extends DockerBase implements Harbor {
     tourBufferSize: number = BuiltInHarborDocker.DEFAULT_TOUR_BUFFER_SIZE;
     traceHeader: boolean = false;
     trouble: Trouble;
+    enableCache: boolean = BuiltInHarborDocker.DEFAULT_ENABLE_CACHE;
+    cacheLifespanSec: number = BuiltInHarborDocker.DEFAULT_CACHE_LIFESPAN_SEC;
+    cacheSizeMb: number = BuiltInHarborDocker.DEFAULT_CACHE_SIZE_MB;
 
     init(ini: BcfElement, parent: Docker) {
         super.init(ini, parent);
@@ -271,6 +277,18 @@ export class BuiltInHarborDocker extends DockerBase implements Harbor {
             case "pidfile":
                 this.pidFile = kv.value;
                 break;
+
+            case "enablecache":
+                this.enableCache = StrUtil.parseBool(kv.value);
+                break;
+
+            case "cachelifespan":
+                this.cacheLifespanSec = Number.parseInt(kv.value);
+                break;
+
+            case "cachesizemb":
+                this.cacheSizeMb = Number.parseInt(kv.value);
+                break;
         }
         return true;
     }
@@ -334,6 +352,18 @@ export class BuiltInHarborDocker extends DockerBase implements Harbor {
 
     isMultiCore(): boolean {
         return this.multiCore;
+    }
+
+    isEnableCache(): boolean {
+        return this.enableCache;
+    }
+
+    getCacheLifespanSec(): number {
+        return this.cacheLifespanSec;
+    }
+
+    getCacheSizeMb(): number {
+        return this.cacheSizeMb;
     }
 
     getNumGrandAgents(): number {

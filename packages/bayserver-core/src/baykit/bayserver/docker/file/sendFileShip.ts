@@ -1,23 +1,26 @@
 import {ReadOnlyShip} from "../../common/readOnlyShip";
 import {Tour} from "../../tour/tour";
 import {Rudder} from "../../rudder/rudder";
-import {Transporter} from "../../agent/multiplexer/transporter";
+import {Transporter} from "../../common/transporter";
 import {Buffer} from "buffer";
 import {BayLog} from "../../bayLog";
 import {NextSocketAction} from "../../agent/nextSocketAction";
 import {IOException} from "../../util/ioException";
 import {HttpStatus} from "../../util/httpStatus";
+import {FileContent} from "./fileContent";
 
 export class SendFileShip extends ReadOnlyShip {
 
     fileWroteLen: number
+    fileContent: FileContent
     tour: Tour
     tourId: number
 
 
-    initSendFileShip(rd: Rudder, tp : Transporter, tur: Tour): void {
+    initSendFileShip(rd: Rudder, tp : Transporter, tur: Tour, fileContent: FileContent = null): void {
         super.init(tur.ship.agentId, rd, tp);
         this.fileWroteLen = 0;
+        this.fileContent = fileContent;
         this.tour = tur;
         this.tourId = tur.tourId;
     }
@@ -32,6 +35,7 @@ export class SendFileShip extends ReadOnlyShip {
 
     reset(): void {
         super.reset()
+        this.fileContent = null
     }
 
     //////////////////////////////////////////////////////
@@ -44,6 +48,10 @@ export class SendFileShip extends ReadOnlyShip {
 
         try {
             let available = this.tour.res.sendResContent(this.tourId, buf, 0, buf.length);
+
+            if (this.fileContent != null) {
+                this.fileContent.append(buf, buf.length);
+            }
 
             if(available) {
                 return NextSocketAction.CONTINUE;

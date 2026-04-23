@@ -11,7 +11,7 @@ import {SocketRudder} from "bayserver-core/baykit/bayserver/rudder/socketRudder"
 import {Socket} from "net";
 import {WarpBase} from "bayserver-core/baykit/bayserver/docker/base/warpBase";
 import {PlainTransporter} from "bayserver-core/baykit/bayserver/agent/multiplexer/plainTransporter";
-import {Transporter} from "bayserver-core/baykit/bayserver/agent/multiplexer/transporter";
+import {Transporter} from "bayserver-core/baykit/bayserver/common/transporter";
 import {Ship} from "bayserver-core/baykit/bayserver/ship/ship";
 
 

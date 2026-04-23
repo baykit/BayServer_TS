@@ -17,8 +17,8 @@ import {Ship} from "../../ship/ship";
 import {Warp} from "../warp";
 import * as net from "net";
 import {SocketRudder} from "../../rudder/socketRudder";
-import {Transporter} from "../../agent/multiplexer/transporter";
-import {RudderState} from "../../agent/multiplexer/rudderState";
+import {Transporter} from "../../common/transporter";
+import {RudderState} from "../../common/rudderState";
 import {RudderStateStore} from "../../common/rudderStateStore";
 
 

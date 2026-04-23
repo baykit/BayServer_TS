@@ -3,7 +3,7 @@ import {GrandAgent} from "../agent/grandAgent";
 import {LifeCycleListener} from "../agent/lifeCycleListener";
 import {ObjectStore} from "../util/objectStore";
 import {StrUtil} from "../util/strUtil";
-import {RudderState} from "../agent/multiplexer/rudderState";
+import {RudderState} from "./rudderState";
 
 
 class AgentListener implements LifeCycleListener {

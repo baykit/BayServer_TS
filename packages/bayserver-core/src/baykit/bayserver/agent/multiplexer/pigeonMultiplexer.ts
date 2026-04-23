@@ -1,5 +1,5 @@
 import {TypeScriptMultiplexerBase} from "./typeScriptMultiplexerBase";
-import {RudderState} from "./rudderState";
+import {RudderState} from "../../common/rudderState";
 import {Rudder} from "../../rudder/rudder";
 import {GrandAgent} from "../grandAgent";
 import {BayLog} from "../../bayLog";

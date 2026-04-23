@@ -8,7 +8,7 @@ import {BayServer} from "bayserver-core/baykit/bayserver/bayserver";
 import {Valve} from "bayserver-core/baykit/bayserver/util/valve";
 import {ReadOnlyShip} from "bayserver-core/baykit/bayserver/common/readOnlyShip";
 import {Rudder} from "bayserver-core/baykit/bayserver/rudder/rudder";
-import {Transporter} from "bayserver-core/baykit/bayserver/agent/multiplexer/transporter";
+import {Transporter} from "bayserver-core/baykit/bayserver/common/transporter";
 
 export class CgiStdOutShip extends ReadOnlyShip {
     fileWroteLen: number

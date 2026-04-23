@@ -1,5 +1,5 @@
 import * as net from "net";
-import {Transporter} from "../agent/multiplexer/transporter";
+import {Transporter} from "../common/transporter";
 import {Ship} from "../ship/ship";
 
 export interface Secure {

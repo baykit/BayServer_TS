@@ -11,7 +11,7 @@ import {HttpStatus} from "../util/httpStatus";
 import {DataConsumeListener} from "../util/dataConsumeListener";
 import {Command} from "../protocol/command";
 import {Rudder} from "../rudder/rudder";
-import {Transporter} from "../agent/multiplexer/transporter";
+import {Transporter} from "./transporter";
 import {Buffer} from "buffer";
 import {NextSocketAction} from "../agent/nextSocketAction";
 import {IOException} from "../util/ioException";

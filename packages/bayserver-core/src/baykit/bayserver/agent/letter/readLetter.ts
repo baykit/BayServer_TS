@@ -6,8 +6,8 @@ export class ReadLetter extends Letter {
     nBytes: number
     address: string
 
-    constructor(rd: Rudder, mpx: Multiplexer, n: number, adr: string) {
-        super(rd, mpx)
+    constructor(stateId: number, rd: Rudder, mpx: Multiplexer, n: number, adr: string) {
+        super(stateId, rd, mpx)
         this.nBytes = n
         this.address = adr
     }

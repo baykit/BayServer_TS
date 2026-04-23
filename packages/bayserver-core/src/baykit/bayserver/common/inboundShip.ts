@@ -13,7 +13,7 @@ import {Buffer} from "buffer";
 import {StrUtil} from "../util/strUtil";
 import {HttpStatus} from "../util/httpStatus";
 import {Rudder} from "../rudder/rudder";
-import {Transporter} from "../agent/multiplexer/transporter";
+import {Transporter} from "./transporter";
 import {NextSocketAction} from "../agent/nextSocketAction";
 import {ProtocolException} from "../protocol/protocolException";
 import {TourHandler} from "../tour/tourHandler";

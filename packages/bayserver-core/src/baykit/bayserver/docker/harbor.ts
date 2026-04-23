@@ -82,6 +82,15 @@ export interface Harbor {
 
     /** Multi core flag */
     isMultiCore(): boolean;
+
+    /** True if cache is enabled */
+    isEnableCache(): boolean;
+
+    /** Lifespan seconds of cache */
+    getCacheLifespanSec(): number;
+
+    /** Size of cache in MB */
+    getCacheSizeMb(): number;
 }
 
 export function getMultiplexerTypeName(type: MultiplexerType) : String {
