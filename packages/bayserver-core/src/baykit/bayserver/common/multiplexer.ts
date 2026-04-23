@@ -38,7 +38,7 @@ export interface Multiplexer {
     useAsyncAPI(): boolean
 
     consumeOldestUnit(st: RudderState): boolean
-    closeRudder(st: RudderState): void
+    closeRudder(rd: Rudder): void
 
     isBusy(): boolean
     onBusy(): void

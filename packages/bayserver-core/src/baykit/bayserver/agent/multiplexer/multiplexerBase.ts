@@ -61,7 +61,21 @@ export abstract class MultiplexerBase implements Multiplexer {
         return false;
     }
 
-    closeRudder(st: RudderState): void {
+    closeRudder(rd: Rudder): void {
+        BayLog.debug("%s closeRd %s", this.agent, rd)
+
+        try {
+            BayLog.trace("%s OS Close", this.agent)
+            rd.reqClose()
+        }
+        catch(e) {
+            if(e instanceof IOException)
+                BayLog.warn("%s OS Close Error: %s", this.agent, e)
+            else
+                throw e
+        }
+
+        BayLog.trace("%s Flush buffer", this.agent)
     }
 
     consumeOldestUnit(st: RudderState): boolean {

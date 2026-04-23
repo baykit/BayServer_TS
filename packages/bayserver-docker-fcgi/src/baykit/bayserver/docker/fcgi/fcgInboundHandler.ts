@@ -94,7 +94,7 @@ export class FcgInboundHandler implements InboundHandler, FcgHandler {
     }
 
     //////////////////////////////////////////////////////////////////
-    // Implements InboundHandler
+    // Implements TourHandler
     //////////////////////////////////////////////////////////////////
 
     sendResHeaders(tur: Tour): void {
