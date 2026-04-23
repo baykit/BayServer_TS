@@ -135,8 +135,9 @@ export class FcgInboundHandler implements InboundHandler, FcgHandler {
         // Send end request command
         cmd = new CmdEndRequest(tur.req.key);
         let ensureFunc = () => {
-            if(!keepAlive)
-                this.ship().postClose();
+            // DO NOT close socket by FCGI server
+            //if(!keepAlive)
+            //    this.ship().postClose();
         };
 
         try {

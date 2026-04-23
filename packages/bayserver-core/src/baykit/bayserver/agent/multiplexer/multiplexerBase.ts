@@ -74,8 +74,6 @@ export abstract class MultiplexerBase implements Multiplexer {
             else
                 throw e
         }
-
-        BayLog.trace("%s Flush buffer", this.agent)
     }
 
     consumeOldestUnit(st: RudderState): boolean {

@@ -1,4 +1,5 @@
 import {InboundShipStore} from "./common/inboundShipStore";
+import {RudderStateStore} from "./common/rudderStateStore";
 import {ProtocolHandlerStore} from "./protocol/protocolHandlerStore";
 import {PacketStore} from "./protocol/packetStore";
 import {TourStore} from "./tour/tourStore";
@@ -39,6 +40,7 @@ export class MemUsage {
         for(const store of PacketStore.getStores(this.agentId)) {
             store.printUsage(indent + 1)
         }
+        RudderStateStore.getStore(this.agentId).printUsage(indent + 1);
         TourStore.getStore(this.agentId).printUsage(indent + 1);
         for (const city of BayServer.cities.getCities()) {
             this.printCityUsage(null, city, indent)

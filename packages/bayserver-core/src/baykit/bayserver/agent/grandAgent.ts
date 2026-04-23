@@ -10,6 +10,7 @@ import {Multiplexer} from "../common/multiplexer";
 import {PigeonMultiplexer} from "./multiplexer/pigeonMultiplexer";
 import {Recipient} from "../common/recipient";
 import {RudderState} from "./multiplexer/rudderState";
+import {RudderStateStore} from "../common/rudderStateStore";
 import {EventRecipient} from "./multiplexer/eventRecipient";
 import {BayMessage} from "../bayMessage";
 import {Symbol} from "../symbol";
@@ -51,7 +52,8 @@ export class GrandAgent {
     static maxShips: number
     static multiCore: boolean
 
-    private static agents: Map<number, GrandAgent> = null
+    /** agents[agentId - 1] => GrandAgent */
+    private static agents: GrandAgent[] = null
 
     static listeners: LifeCycleListener[] = [];
 
@@ -119,8 +121,10 @@ export class GrandAgent {
         try {
             if (this.anchorable) {
                 // Adds server socket channel of anchorable ports
-                for (const rd of BayServer.anchorablePortMap.keys()) {
-                    this.netMultiplexer.addRudderState(rd, new RudderState(rd));
+                for (const { rudder } of BayServer.anchorablePorts) {
+                    let st = RudderStateStore.getStore(this.agentId).rent();
+                    st.init(rudder);
+                    this.netMultiplexer.addRudderState(rudder, st);
                 }
             }
 
@@ -157,23 +161,29 @@ export class GrandAgent {
                 while (this.letterQueue.length > 0) {
                     let letter = this.letterQueue.shift()
 
+                    let st = letter.multiplexer.getRudderState(letter.rudder)
+                    if(st == null) {
+                        BayLog.debug("%s rudder is already returned: %s", this, letter.rudder)
+                        continue
+                    }
+
                     if(letter instanceof AcceptedLetter) {
-                        this.onAccepted(letter)
+                        this.onAccepted(letter, st)
                     }
                     else if(letter instanceof ConnectedLetter) {
-                        this.onConnected(letter)
+                        this.onConnected(letter, st)
                     }
                     else if(letter instanceof ReadLetter) {
-                        this.onRead(letter)
+                        this.onRead(letter, st)
                     }
                     else if(letter instanceof WroteLetter) {
-                        this.onWrote(letter)
+                        this.onWrote(letter, st)
                     }
                     else if(letter instanceof ClosedLetter) {
-                        this.onClosed(letter)
+                        this.onClosed(letter, st)
                     }
                     else if(letter instanceof ErrorLetter) {
-                        this.onError(letter)
+                        this.onError(letter, st)
                     }
                 }
             }
@@ -227,44 +237,46 @@ export class GrandAgent {
         this.commandReceiver = new CommandReceiver()
         let comTransporter = new PlainTransporter(this.netMultiplexer, this.commandReceiver, true, 8, false);
         this.commandReceiver.init(this.agentId, rd, comTransporter);
-        this.netMultiplexer.addRudderState(this.commandReceiver.rudder, new RudderState(this.commandReceiver.rudder, comTransporter));
+        let st = RudderStateStore.getStore(this.agentId).rent();
+        st.init(this.commandReceiver.rudder, comTransporter);
+        this.netMultiplexer.addRudderState(this.commandReceiver.rudder, st);
         this.netMultiplexer.reqRead(this.commandReceiver.rudder)
     }
 
-    sendAcceptedLetter(st: RudderState, clientRd: Rudder, wakeup: boolean): void {
-        if(st == null)
+    sendAcceptedLetter(rd: Rudder, mpx: Multiplexer, clientRd: Rudder, wakeup: boolean): void {
+        if(rd == null)
             throw new Sink();
-        this.sendLetter(new AcceptedLetter(st, clientRd), wakeup);
+        this.sendLetter(new AcceptedLetter(rd, mpx, clientRd), wakeup);
     }
 
-    sendConnectedLetter(st: RudderState, wakeup: boolean): void {
-        if(st == null)
+    sendConnectedLetter(rd: Rudder, mpx: Multiplexer, wakeup: boolean): void {
+        if(rd == null)
             throw new Sink();
-        this.sendLetter(new ConnectedLetter(st), wakeup);
+        this.sendLetter(new ConnectedLetter(rd, mpx), wakeup);
     }
 
-    sendReadLetter(st: RudderState, n: number, adr: string, wakeup: boolean): void {
-        if(st == null)
+    sendReadLetter(rd: Rudder, mpx: Multiplexer, n: number, adr: string, wakeup: boolean): void {
+        if(rd == null)
             throw new Sink();
-        this.sendLetter(new ReadLetter(st, n, adr), wakeup);
+        this.sendLetter(new ReadLetter(rd, mpx, n, adr), wakeup);
     }
 
-    sendWroteLetter(st: RudderState, n: number, wakeup: boolean): void {
-        if(st == null)
+    sendWroteLetter(rd: Rudder, mpx: Multiplexer, n: number, wakeup: boolean): void {
+        if(rd == null)
             throw new Sink();
-        this.sendLetter(new WroteLetter(st, n), wakeup);
+        this.sendLetter(new WroteLetter(rd, mpx, n), wakeup);
     }
 
-    sendClosedLetter(st: RudderState, wakeup: boolean): void {
-        if(st == null)
+    sendClosedLetter(rd: Rudder, mpx: Multiplexer, wakeup: boolean): void {
+        if(rd == null)
             throw new Sink();
-        this.sendLetter(new ClosedLetter(st), wakeup);
+        this.sendLetter(new ClosedLetter(rd, mpx), wakeup);
     }
 
-    sendErrorLetter(st: RudderState, e: Error, wakeup: boolean): void {
-        if(st == null)
+    sendErrorLetter(rd: Rudder, mpx: Multiplexer, e: Error, wakeup: boolean): void {
+        if(rd == null)
             throw new Sink();
-        this.sendLetter(new ErrorLetter(st, e), wakeup);
+        this.sendLetter(new ErrorLetter(rd, mpx, e), wakeup);
     }
 
     reloadCert() {
@@ -299,7 +311,7 @@ export class GrandAgent {
             lis.remove(this.agentId)
 
         this.commandReceiver.end()
-        GrandAgent.agents.delete(this.agentId)
+        GrandAgent.agents[this.agentId - 1] = null
     }
 
     abort(err: Error = null) {
@@ -338,9 +350,9 @@ export class GrandAgent {
             BayLog.debug("%s child agt#%d is exited: code=%d sig=%d", this, agentId, code, signal)
         })
 
-        for (const [rd, portDkr] of BayServer.anchorablePortMap) {
-            //BayLog.debug("%s send server socket to agt#%d(port=%d)", this, agentId, portDkr.getPort())
-            child.send("serverSocket", (rd as ServerRudder).server)
+        for (const { rudder } of BayServer.anchorablePorts) {
+            //BayLog.debug("%s send server socket to agt#%d(port=%d)", this, agentId, port.getPort())
+            child.send("serverSocket", (rudder as ServerRudder).server)
         }
     }
 
@@ -396,31 +408,30 @@ export class GrandAgent {
         }
     }
 
-    private onAccepted(letter: AcceptedLetter) {
+    private onAccepted(letter: AcceptedLetter, st: RudderState) {
         try {
-            let p = BayServer.anchorablePortMap.get(letter.state.rudder)
-            p.onConnected(this.agentId, letter.clientRudder, letter.state.rudder)
+            let p = BayServer.findAnchorablePort(st.rudder)
+            p.onConnected(this.agentId, letter.clientRudder, st.rudder)
         }
         catch(e) {
             if (e instanceof IOException) {
-                letter.state.transporter.onError(letter.state.rudder, e)
-                this.nextAction(letter.state, NextSocketAction.CLOSE, false)
+                st.transporter.onError(st.rudder, e)
+                this.nextAction(st, NextSocketAction.CLOSE, false)
             }
             else if(e instanceof HttpException) {
                 BayLog.error_e(e)
-                letter.state.multiplexer.reqClose(letter.clientRudder)
+                st.multiplexer.reqClose(letter.clientRudder)
             }
             else
                 throw e
         }
 
         if(!this.netMultiplexer.isBusy()) {
-            letter.state.multiplexer.nextAccept(letter.state)
+            st.multiplexer.nextAccept(st)
         }
     }
 
-    private onConnected(letter: ConnectedLetter) : void {
-        let st = letter.state;
+    private onConnected(letter: ConnectedLetter, st: RudderState) : void {
 
         var nextAct: NextSocketAction
         try {
@@ -441,8 +452,7 @@ export class GrandAgent {
         this.nextAction(st, nextAct, false)
     }
 
-    private onRead(letter: ReadLetter) : void {
-        let st = letter.state;
+    private onRead(letter: ReadLetter, st: RudderState) : void {
         if (st.closed) {
             BayLog.debug("%s Rudder is already closed: rd=%s", this, st.rudder);
             return;
@@ -467,8 +477,7 @@ export class GrandAgent {
         this.nextAction(st, nextAct, true);
     }
 
-    private onWrote(letter: WroteLetter) : void {
-        let st = letter.state;
+    private onWrote(letter: WroteLetter, st: RudderState) : void {
         if (st.closed) {
             BayLog.debug("%s Rudder is already closed: rd=%s", this, st.rudder);
             return;
@@ -515,10 +524,9 @@ export class GrandAgent {
         }
     }
 
-    private onClosed(letter: ClosedLetter) : void {
-        BayLog.debug("%s closed rd=%s", this, letter.state.rudder);
+    private onClosed(letter: ClosedLetter, st: RudderState) : void {
+        BayLog.debug("%s closed rd=%s", this, st.rudder);
 
-        let st = letter.state
         if(st.closed)
             return;
         st.closed = true;
@@ -533,17 +541,17 @@ export class GrandAgent {
         if (st.transporter != null)
             st.transporter.onClosed(st.rudder);
 
-        letter.state.closed = true
-        letter.state.access()
+        st.closed = true
+        st.access()
     }
 
-    private onError(letter: ErrorLetter) {
+    private onError(letter: ErrorLetter, st: RudderState) {
         try {
             throw letter.err
         } catch (e) {
             if (e instanceof IOException) {
-                letter.state.transporter.onError(letter.state.rudder, e)
-                this.nextAction(letter.state, NextSocketAction.CLOSE, false)
+                st.transporter.onError(st.rudder, e)
+                this.nextAction(st, NextSocketAction.CLOSE, false)
             } else
                 throw e
         }
@@ -600,7 +608,7 @@ export class GrandAgent {
     static init(agtIds: number[], maxShips: number) {
         this.agentCount = agtIds.length;
         this.maxShips = maxShips;
-        this.agents = new Map()
+        this.agents = []
 
         for(const agtId of agtIds) {
             this.add(agtId, true);
@@ -608,12 +616,11 @@ export class GrandAgent {
     }
 
     static get(agentId: number): GrandAgent {
-        return this.agents.get(agentId)
+        return this.agents[agentId - 1]
     }
 
     static getByIndex(idx: number) {
-        let agents = Array.from(this.agents.values())
-        return agents[idx]
+        return this.agents[idx]
     }
 
     static add(agentId: number, anchorable: boolean) {
@@ -625,7 +632,9 @@ export class GrandAgent {
 
         // Agents run on multi core (process mode)
         let agt: GrandAgent = new GrandAgent(agentId, this.maxShips, anchorable);
-        this.agents.set(agentId, agt)
+        while(this.agents.length < agentId)
+            this.agents.push(null)
+        this.agents[agentId - 1] = agt
 
         for(const lis of this.listeners) {
             lis.add(agentId)

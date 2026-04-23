@@ -25,6 +25,7 @@ import {Rudder} from "../../rudder/rudder";
 import {Transporter} from "../../agent/multiplexer/transporter";
 import {SocketRudder} from "../../rudder/socketRudder";
 import {RudderState} from "../../agent/multiplexer/rudderState";
+import {RudderStateStore} from "../../common/rudderStateStore";
 import {Socket} from "net";
 import {ServerRudder} from "../../rudder/serverRudder";
 export abstract class PortBase extends DockerBase implements Port, Docker {
@@ -38,6 +39,7 @@ export abstract class PortBase extends DockerBase implements Port, Docker {
     anchored: boolean = true;
     additionalHeaders: string[][] = [];
     cities: Cities = new Cities();
+    private socketBufferSize: number = -1;
 
     getType(): string {
         return "port"
@@ -250,11 +252,14 @@ export abstract class PortBase extends DockerBase implements Port, Docker {
             clientRd = new SocketRudder(sslSkt)
         }
         else {
+            if(this.socketBufferSize < 0) {
+                this.socketBufferSize = IOUtil.getSockRecvBufSize(clientSkt);
+            }
             tp = new PlainTransporter(
                 agt.netMultiplexer,
                 sip,
                 true,
-                IOUtil.getSockRecvBufSize(clientSkt),
+                this.socketBufferSize,
                 false);
         }
 
@@ -263,7 +268,8 @@ export abstract class PortBase extends DockerBase implements Port, Docker {
         sip.initInbound(clientRd, agtId, tp, this, protoHnd);
         tp.init()
 
-        let st = new RudderState(clientRd, tp)
+        let st = RudderStateStore.getStore(agtId).rent()
+        st.init(clientRd, tp)
         agt.netMultiplexer.addRudderState(clientRd, st)
         agt.netMultiplexer.reqRead(clientRd)
         return tp;

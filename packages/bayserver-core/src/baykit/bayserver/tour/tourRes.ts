@@ -170,10 +170,6 @@ export class TourRes implements Reusable{
         this.available = true;
     }
 
-    detachConsumeListener() {
-        this.resConsumeListener = null;
-    }
-
     sendResContent(checkId: number, buf: Buffer, ofs: number, len: number) {
         if (buf == null)
             throw new Error("nullPo");
@@ -368,6 +364,8 @@ export class TourRes implements Reusable{
 
     private consumed(chkId: number, len: number) {
         this.tour.checkTourId(chkId);
+        if (this.resConsumeListener == null)
+            throw new Sink("Consume listener is null");
 
         this.bytesConsumed += len;
 
@@ -383,11 +381,8 @@ export class TourRes implements Reusable{
             resume = true;
         }
 
-        if(!this.tour.isZombie()) {
-            if(this.resConsumeListener == null)
-                BayLog.debug("Consume listener is null, so can not invoke callback");
-            else
-                this.resConsumeListener(len, resume);
+        if(this.tour.isRunning()) {
+            this.resConsumeListener(len, resume);
         }
     }
 

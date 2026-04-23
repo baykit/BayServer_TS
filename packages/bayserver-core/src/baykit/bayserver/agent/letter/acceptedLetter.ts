@@ -1,12 +1,12 @@
 import {Rudder} from "../../rudder/rudder";
-import {RudderState} from "../multiplexer/rudderState";
 import {Letter} from "./letter";
+import {Multiplexer} from "../../common/multiplexer";
 
 export class AcceptedLetter extends Letter {
     clientRudder: Rudder
 
-    constructor(st: RudderState, rd: Rudder) {
-        super(st)
-        this.clientRudder = rd;
+    constructor(rd: Rudder, mpx: Multiplexer, clientRd: Rudder) {
+        super(rd, mpx)
+        this.clientRudder = clientRd;
     }
 }

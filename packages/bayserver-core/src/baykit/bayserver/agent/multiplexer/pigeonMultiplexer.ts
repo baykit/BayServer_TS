@@ -13,7 +13,7 @@ export class PigeonMultiplexer extends TypeScriptMultiplexerBase {
     }
 
     toString() {
-        return "PigeonMpx[" + this.agent + "]";
+        return "PgnMpx[" + this.agent + "]";
     }
 
     reqAccept(rd: Rudder): void {
@@ -30,7 +30,7 @@ export class PigeonMultiplexer extends TypeScriptMultiplexerBase {
             BayLog.warn("%s rudder state not found: rd=%s", this.agent, rd)
             return
         }
-        BayLog.debug("%s reqRead rd=%s st=%s", this.agent, rd, st);
+        BayLog.debug("%s reqRead rd=%s st=%s", this, rd, st);
 
         this.nextRead(st)
         st.access()

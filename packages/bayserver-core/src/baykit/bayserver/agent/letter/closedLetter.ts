@@ -1,9 +1,10 @@
 import {Letter} from "./letter";
-import {RudderState} from "../multiplexer/rudderState";
+import {Rudder} from "../../rudder/rudder";
+import {Multiplexer} from "../../common/multiplexer";
 
 export class ClosedLetter extends Letter {
 
-    constructor(st: RudderState) {
-        super(st)
+    constructor(rd: Rudder, mpx: Multiplexer) {
+        super(rd, mpx)
     }
 }

@@ -19,6 +19,7 @@ import * as net from "net";
 import {SocketRudder} from "../../rudder/socketRudder";
 import {Transporter} from "../../agent/multiplexer/transporter";
 import {RudderState} from "../../agent/multiplexer/rudderState";
+import {RudderStateStore} from "../../common/rudderStateStore";
 
 
 class AgentListener implements LifeCycleListener {
@@ -158,7 +159,9 @@ export abstract class WarpBase extends ClubBase implements  Warp{
 
             if(needConnect) {
                 //agt.nonBlockingHandler.addChannelListener(wsip.ch, tp)
-                agt.netMultiplexer.addRudderState(wsip.rudder, new RudderState(wsip.rudder, tp))
+                let st = RudderStateStore.getStore(agt.agentId).rent()
+                st.init(wsip.rudder, tp)
+                agt.netMultiplexer.addRudderState(wsip.rudder, st)
                 agt.netMultiplexer.getTransporter(wsip.rudder).reqConnect(wsip.rudder, this.hostAddr, this.port)
             }
 

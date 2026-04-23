@@ -21,8 +21,13 @@ export class HttpStatus {
 
     static initialized: boolean = false;
     static statusMap: Map<number, string>
+    static descOk: string
 
     public static description(statusCode: number): string {
+
+        if(statusCode == HttpStatus.OK)
+            return HttpStatus.descOk; // For performance reasons, hash table lookups will be avoided.
+
         let desc: string = HttpStatus.statusMap.get(statusCode)
         if (desc == null) {
             BayLog.error("Status " + statusCode + " is invalid.");
@@ -45,6 +50,7 @@ export class HttpStatus {
                 this.statusMap.set(Number.parseInt(kv.key), kv.value)
             }
         }
+        this.descOk = this.statusMap.get(HttpStatus.OK)
         this.initialized = true;
     }
 }

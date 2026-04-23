@@ -9,11 +9,13 @@ import {GrandAgent} from "../agent/grandAgent";
 class AgentListener implements LifeCycleListener {
 
     add(agentId: number) {
-        TourStore.stores.set(agentId, new TourStore())
+        while(TourStore.stores.length < agentId)
+            TourStore.stores.push(null)
+        TourStore.stores[agentId - 1] = new TourStore()
     }
 
     remove(agentId: number): void {
-        TourStore.stores.delete(agentId)
+        TourStore.stores[agentId - 1] = null
     }
 }
 
@@ -25,8 +27,8 @@ export class TourStore {
     private activeTourMap: Map<BigInt, Tour>
     static maxCount: number;
 
-    /** Agent ID => TourStore */
-    static stores: Map<number, TourStore> = null
+    /** stores[agentId - 1] => TourStore */
+    static stores: TourStore[] = null
 
     constructor() {
         this.activeTourMap = new Map()
@@ -91,11 +93,11 @@ export class TourStore {
     }
 
     static getStore(agentId: number): TourStore {
-        return this.stores.get(agentId)
+        return this.stores[agentId - 1]
     }
 
     static initClass() {
-        this.stores = new Map()
+        this.stores = []
     }
 }
 

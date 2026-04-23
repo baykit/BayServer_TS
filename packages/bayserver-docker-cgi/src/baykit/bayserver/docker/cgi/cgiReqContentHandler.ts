@@ -17,6 +17,7 @@ import {Sink} from "bayserver-core/baykit/bayserver/sink";
 import {CgiStdOutShip} from "./cgiStdOutShip";
 import {PlainTransporter} from "bayserver-core/baykit/bayserver/agent/multiplexer/plainTransporter";
 import {RudderState} from "bayserver-core/baykit/bayserver/agent/multiplexer/rudderState";
+import {RudderStateStore} from "bayserver-core/baykit/bayserver/common/rudderStateStore";
 import {CgiStdErrShip} from "./cgiStdErrShip";
 
 export class CgiReqContentHandler implements ReqContentHandler, Postpone {
@@ -166,12 +167,11 @@ export class CgiReqContentHandler implements ReqContentHandler, Postpone {
 
         outShip.initStdOut(outRd, this.tour.ship.agentId, this.tour, outTp, this)
 
-        mpx.addRudderState(
-            outRd,
-            new RudderState(outRd, outTp)
-        )
+        let outSt = RudderStateStore.getStore(this.tour.ship.agentId).rent()
+        outSt.init(outRd, outTp)
+        mpx.addRudderState(outRd, outSt)
 
-        let sid = this.tour.ship.shipId
+        let sid = outShip.shipId
         this.tour.res.setConsumeListener((len, resume) => {
             if(resume)
                 outShip.resumeRead(sid)
@@ -182,10 +182,9 @@ export class CgiReqContentHandler implements ReqContentHandler, Postpone {
         errTp.init()
         errShip.initStdErr(errRd, this.tour.ship.agentId, this)
 
-        mpx.addRudderState(
-            errRd,
-            new RudderState(errRd, errTp)
-        )
+        let errSt = RudderStateStore.getStore(this.tour.ship.agentId).rent()
+        errSt.init(errRd, errTp)
+        mpx.addRudderState(errRd, errSt)
 
         mpx.reqRead(outRd)
         mpx.reqRead(errRd)

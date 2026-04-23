@@ -19,7 +19,7 @@ export class GrandAgentMonitor {
 
     static numAgents: number
     static curId: number = 1
-    static anchoredPortMap: Map<Rudder, Port> = new Map()   // TCP Port map
+    static anchoredPorts: { rudder: Rudder, port: Port }[] = []   // TCP Port list
 
     static monitors: Map<number, GrandAgentMonitor> = null
 
@@ -136,10 +136,10 @@ export class GrandAgentMonitor {
     // Class methods
     //////////////////////////////////////////////////////
 
-    static init(numAgents: number, anchoredPortMap: Map<Rudder, Port>): void {
+    static init(numAgents: number, anchoredPorts: { rudder: Rudder, port: Port }[]): void {
         BayLog.debug("Init GrandAgentMonitor numAgents=%d", numAgents)
         this.numAgents = numAgents
-        this.anchoredPortMap = anchoredPortMap
+        this.anchoredPorts = anchoredPorts
         this.monitors = new Map()
         this.add(true, true, () => {
             for(let i = 1; i < this.numAgents; i++) {
@@ -197,7 +197,7 @@ export class GrandAgentMonitor {
             });
         }
         else {
-            for (const portDkr of this.anchoredPortMap) {
+            for (const _ of this.anchoredPorts) {
                 IOUtil.openLocalPipe(
                     (serverSideSocket) => {
                         let agt = GrandAgent.get(agentId)

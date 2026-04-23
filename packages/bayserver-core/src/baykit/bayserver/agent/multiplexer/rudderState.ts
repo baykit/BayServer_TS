@@ -2,10 +2,11 @@ import {Rudder} from "../../rudder/rudder";
 import {Transporter} from "./transporter";
 import {Multiplexer} from "../../common/multiplexer";
 import {WriteUnit} from "./writeUnit";
+import {Reusable} from "../../util/Reusable";
 
-export class RudderState {
-    readonly rudder: Rudder
-    readonly transporter: Transporter
+export class RudderState implements Reusable {
+    rudder: Rudder
+    transporter: Transporter
     multiplexer: Multiplexer
 
     lastAccessTime: number
@@ -23,7 +24,12 @@ export class RudderState {
     timeoutSec: number = 0
 
 
-    constructor(rd: Rudder, tp: Transporter = null, timeoutSec: number = 0) {
+    constructor() {
+    }
+
+    init(rd: Rudder, tp: Transporter = null, timeoutSec: number = 0): void {
+        if (rd == null)
+            throw new Error("nullPo");
         this.rudder = rd
         this.transporter = tp
         this.closed = false
@@ -34,6 +40,23 @@ export class RudderState {
         else {
             this.readBuf = Buffer.alloc(8192)
         }
+    }
+
+    reset(): void {
+        this.rudder = null
+        this.transporter = null
+        this.multiplexer = null
+        this.lastAccessTime = undefined
+        this.closing = false
+        this.readBuf = null
+        this.writeQueue = []
+        this.reading = false
+        this.writing = false
+        this.bytesRead = 0
+        this.bytesWrote = 0
+        this.closed = false
+        this.finale = false
+        this.timeoutSec = 0
     }
 
     toString(): string {

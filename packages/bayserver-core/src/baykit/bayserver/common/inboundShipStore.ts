@@ -9,19 +9,21 @@ import {GrandAgent} from "../agent/grandAgent";
 class AgentListener implements LifeCycleListener {
 
     add(agentId: number) {
-        InboundShipStore.stores[agentId] = new InboundShipStore()
+        while(InboundShipStore.stores.length < agentId)
+            InboundShipStore.stores.push(null)
+        InboundShipStore.stores[agentId - 1] = new InboundShipStore()
     }
 
     remove(agentId: number): void {
-        delete InboundShipStore.stores[agentId]
+        InboundShipStore.stores[agentId - 1] = null
     }
 }
 
 
 export class InboundShipStore extends ObjectStore<InboundShip> {
 
-    /** Agent id => InboundShipStore */
-    static stores: {[key: number]: InboundShipStore} = {}
+    /** stores[agentId - 1] => InboundShipStore */
+    static stores: InboundShipStore[] = []
 
     constructor() {
         super(() => new InboundShip());
@@ -41,6 +43,6 @@ export class InboundShipStore extends ObjectStore<InboundShip> {
     }
 
     static getStore(agentId: number): InboundShipStore {
-        return this.stores[agentId];
+        return this.stores[agentId - 1];
     }
 }

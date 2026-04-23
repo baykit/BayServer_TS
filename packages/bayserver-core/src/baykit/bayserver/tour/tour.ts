@@ -65,7 +65,7 @@ export class Tour implements Reusable{
         this.res.init();
 
         this.changeState(Tour.TOUR_ID_NOCHECK, Tour.STATE_PREPARING);
-        BayLog.debug(this + " initialized");
+        BayLog.debug("%s initialized", this);
     }
 
     toString(): string {
@@ -119,18 +119,7 @@ export class Tour implements Reusable{
             throw new HttpException(HttpStatus.NOT_FOUND, this.req.uri);
         }
         else {
-            try {
-                city.enter(this);
-            }
-            catch(e) {
-                if(e instanceof HttpException) {
-                    this.changeState(this.tourId, Tour.STATE_ABORTED)
-                    throw e;
-                }
-                else {
-                    throw e;
-                }
-            }
+            city.enter(this);
         }
     }
 

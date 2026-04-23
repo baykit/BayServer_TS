@@ -13,6 +13,7 @@ import {FileRudder} from "../../rudder/fileRudder";
 import {SendFileShip} from "./sendFileShip";
 import * as fs from "fs";
 import {RudderState} from "../../agent/multiplexer/rudderState";
+import {RudderStateStore} from "../../common/rudderStateStore";
 import {BayServer} from "../../bayserver";
 import {MULTIPLEXER_TYPE_PIGEON} from "../harbor";
 import {Multiplexer} from "../../common/multiplexer";
@@ -115,7 +116,9 @@ export class FileContentHandler implements ReqContentHandler {
                 if(resume)
                     sip.resumeRead(sid)
             })
-            mpx.addRudderState(rd, new RudderState(rd, tp))
+            let st = RudderStateStore.getStore(tur.ship.agentId).rent()
+            st.init(rd, tp)
+            mpx.addRudderState(rd, st)
             mpx.reqRead(rd)
 
         } catch (e) {

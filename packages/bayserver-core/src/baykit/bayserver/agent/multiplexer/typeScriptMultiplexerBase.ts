@@ -34,27 +34,27 @@ export abstract class TypeScriptMultiplexerBase extends MultiplexerBase implemen
         st.rudder.registerReadHandler((buf, n) => {
             BayLog.debug("%s read %d bytes", this, n)
             st.readBuf = buf
-            this.agent.sendReadLetter(st, n, null, true);
+            this.agent.sendReadLetter(st.rudder, this, n, null, true);
         })
 
         st.rudder.registerWriteHandler(n => {
-            this.agent.sendWroteLetter(st, n, true);
+            this.agent.sendWroteLetter(st.rudder, this, n, true);
         })
 
         st.rudder.registerErrorHandler(e => {
             BayLog.error_e(e, "%s Read error: %s", this, e)
-            this.agent.sendErrorLetter(st, new IOException(e.message), true);
+            this.agent.sendErrorLetter(st.rudder, this, new IOException(e.message), true);
         })
 
         st.rudder.registerCloseHandler(() => {
             BayLog.debug("%s closed: rd=%s", this, st.rudder)
-            this.agent.sendClosedLetter(st, true)
+            this.agent.sendClosedLetter(st.rudder, this, true)
         })
 
         if (st.rudder instanceof ServerRudder) {
             let sktRd: ServerRudder = st.rudder
             sktRd.server.on('connection',  (socket: Socket) => {
-                this.agent.sendAcceptedLetter(st, new SocketRudder(socket), true)
+                this.agent.sendAcceptedLetter(st.rudder, this, new SocketRudder(socket), true)
             });
         }
     }
@@ -122,8 +122,8 @@ export abstract class TypeScriptMultiplexerBase extends MultiplexerBase implemen
         if(this.agent.aborted)
             return;
 
-        for (const rd of BayServer.anchorablePortMap.keys()) {
-            this.reqAccept(rd);
+        for (const { rudder } of BayServer.anchorablePorts) {
+            this.reqAccept(rudder);
         }
     }
 

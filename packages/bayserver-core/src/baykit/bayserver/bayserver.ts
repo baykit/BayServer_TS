@@ -26,6 +26,7 @@ import path = require("path");
 import {Cities} from "./util/cities";
 import {PacketStore} from "./protocol/packetStore";
 import {InboundShipStore} from "./common/inboundShipStore";
+import {RudderStateStore} from "./common/rudderStateStore";
 import {ProtocolHandlerStore} from "./protocol/protocolHandlerStore";
 import {TourStore} from "./tour/tourStore";
 import {MemUsage} from "./memUsage";
@@ -79,9 +80,9 @@ export class BayServer {
     public static originalConsoleLog: (message?: any, ...optionalParams: any[]) => void;
     public static originalConsoleError: (message?: any, ...optionalParams: any[]) => void;
 
-    /** Port map */
-    public static readonly anchorablePortMap: Map<Rudder, Port> = new Map();   // TCP server port map
-    public static readonly unanchorablePortMap: Map<Rudder, Port> = new Map();   // TCP server port map
+    /** Port list */
+    public static readonly anchorablePorts: { rudder: Rudder, port: Port }[] = [];     // TCP server port list
+    public static readonly unanchorablePorts: { rudder: Rudder, port: Port }[] = [];   // UDP server port list
 
     public static main(args:string[]) {
 
@@ -226,6 +227,7 @@ export class BayServer {
 
             /** Init stores, memory usage managers */
             PacketStore.init();
+            RudderStateStore.init();
             InboundShipStore.init();
             ProtocolHandlerStore.init();
             TourStore.init(TourStore.MAX_TOURS);
@@ -300,8 +302,8 @@ export class BayServer {
                 })
 
                 ch.listen(portDkr.getPort(), () => {
-                    this.anchorablePortMap.set(rd, portDkr)
-                    if (this.anchorablePortMap.size == this.ports.length) {
+                    this.anchorablePorts.push({ rudder: rd, port: portDkr })
+                    if (this.anchorablePorts.length == this.ports.length) {
                         callback()
                     }
                 })
@@ -326,7 +328,7 @@ export class BayServer {
                 BayServer.harbor.getMaxShips())
         }
 
-        GrandAgentMonitor.init(this.harbor.getNumGrandAgents(), this.anchorablePortMap)
+        GrandAgentMonitor.init(this.harbor.getNumGrandAgents(), this.anchorablePorts)
         SignalAgent.init(this.harbor.getControlPort())
         this.createPidFile(SysUtil.pid())
     }
@@ -365,8 +367,8 @@ export class BayServer {
                         exit(1);
                     }
                     else {
-                        BayServer.anchorablePortMap.set(new ServerRudder(skt as Server), portDkr)
-                        if (BayServer.anchorablePortMap.size == this.ports.length) {
+                        BayServer.anchorablePorts.push({ rudder: new ServerRudder(skt as Server), port: portDkr })
+                        if (BayServer.anchorablePorts.length == this.ports.length) {
                             // All ports are opened
                             BayLog.debug("init child (inherit port)")
                             this.initChildGrandAgent(agentId)
@@ -440,6 +442,17 @@ export class BayServer {
             return this.bservHome + path.sep + location;
         else
             return location;
+    }
+
+    /**
+     * Finds port docker from server socket rudder
+     */
+    static findAnchorablePort(rd: Rudder): Port {
+        for(const { rudder, port } of this.anchorablePorts) {
+            if(rudder === rd)
+                return port;
+        }
+        return null;
     }
 
 

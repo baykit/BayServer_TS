@@ -32,6 +32,7 @@ import {MULTIPLEXER_TYPE_PIGEON} from "../harbor";
 import {FileRudder} from "../../rudder/fileRudder";
 import {Sink} from "../../sink";
 import {RudderState} from "../../agent/multiplexer/rudderState";
+import {RudderStateStore} from "../../common/rudderStateStore";
 import {statSync} from "fs";
 
 class AgentListener implements LifeCycleListener {
@@ -67,7 +68,8 @@ class AgentListener implements LifeCycleListener {
                     throw new Sink()
             }
 
-            let st = new RudderState(rd)
+            let st = RudderStateStore.getStore(agtId).rent()
+            st.init(rd)
             st.bytesWrote = size
             mpx.addRudderState(rd, st)
             this.docker.multiplexers[agtId] = mpx
