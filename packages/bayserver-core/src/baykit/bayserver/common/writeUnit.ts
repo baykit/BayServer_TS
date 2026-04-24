@@ -1,4 +1,4 @@
-import {DataConsumeListener} from "../../util/dataConsumeListener";
+import {DataConsumeListener} from "../util/dataConsumeListener";
 
 export class WriteUnit {
     buf: Buffer

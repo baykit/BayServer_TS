@@ -6,7 +6,7 @@ import {Rudder} from "../../rudder/rudder";
 import {DataConsumeListener} from "../../util/dataConsumeListener";
 import {BayLog} from "../../bayLog";
 import {IOException} from "../../util/ioException";
-import {WriteUnit} from "./writeUnit";
+import {WriteUnit} from "../../common/writeUnit";
 import {RudderState} from "../../common/rudderState";
 import {ServerRudder} from "../../rudder/serverRudder";
 import {Socket} from "net";

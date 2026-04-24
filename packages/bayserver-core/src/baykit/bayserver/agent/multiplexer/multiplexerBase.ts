@@ -4,7 +4,7 @@ import {RudderState} from "../../common/rudderState";
 import {Buffer} from "buffer";
 import {GrandAgent} from "../grandAgent";
 import {BayLog} from "../../bayLog";
-import {WriteUnit} from "./writeUnit";
+import {WriteUnit} from "../../common/writeUnit";
 import {Transporter} from "../../common/transporter";
 import {ProtocolException} from "../../protocol/protocolException";
 import {DataConsumeListener} from "../../util/dataConsumeListener";

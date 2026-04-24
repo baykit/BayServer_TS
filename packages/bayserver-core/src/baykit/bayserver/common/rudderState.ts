@@ -1,7 +1,7 @@
 import {Rudder} from "../rudder/rudder";
 import {Transporter} from "./transporter";
 import {Multiplexer} from "./multiplexer";
-import {WriteUnit} from "../agent/multiplexer/writeUnit";
+import {WriteUnit} from "./writeUnit";
 import {Reusable} from "../util/Reusable";
 
 export class RudderState implements Reusable {

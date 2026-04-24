@@ -8,7 +8,7 @@ import {IOException} from "../../util/ioException";
 import {ServerRudder} from "../../rudder/serverRudder";
 import {Socket} from "net";
 import {SocketRudder} from "../../rudder/socketRudder";
-import {WriteUnit} from "./writeUnit";
+import {WriteUnit} from "../../common/writeUnit";
 import {Buffer} from "buffer";
 import {ReadableRudder} from "../../rudder/readableRudder";
 import {Sink} from "../../sink";
