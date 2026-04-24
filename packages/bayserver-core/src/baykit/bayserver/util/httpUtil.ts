@@ -33,7 +33,7 @@ export class HttpUtil {
      * Parse AUTHORIZATION header
      */
     static parseAuthrization(tur: Tour) {
-        let auth = tur.req.headers.get(HttpHeaders.AUTHORIZATION);
+        let auth = tur.req.headers.getFast(HttpHeaders.AUTHORIZATION);
         if (!StrUtil.empty(auth)) {
             let mch = auth.match(/Basic (.*)/);
             if (!mch) {
@@ -58,13 +58,13 @@ export class HttpUtil {
     static parseHostPort(tour: Tour, defaultPort: number) {
         tour.req.reqHost = "";
 
-        let hostPort = tour.req.headers.get(HttpHeaders.X_FORWARDED_HOST);
+        let hostPort = tour.req.headers.getFast(HttpHeaders.X_FORWARDED_HOST);
         if(StrUtil.isSet(hostPort)) {
             tour.req.headers.remove(HttpHeaders.X_FORWARDED_HOST);
-            tour.req.headers.set(HttpHeaders.HOST, hostPort);
+            tour.req.headers.setFast(HttpHeaders.HOST, hostPort);
         }
 
-        hostPort = tour.req.headers.get(HttpHeaders.HOST);
+        hostPort = tour.req.headers.getFast(HttpHeaders.HOST);
         if(StrUtil.isSet(hostPort)) {
             let pos = hostPort.lastIndexOf(':');
             if(pos == -1) {

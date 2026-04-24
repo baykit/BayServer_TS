@@ -116,12 +116,12 @@ export class FcgInboundHandler implements InboundHandler, FcgHandler {
         HttpUtil.sendMimeHeaders(tur.res.headers, buf);
         HttpUtil.sendNewLine(buf);
         let cmd = new CmdStdOut(tur.req.key, buf.buf, 0, buf.len);
-        this.protocolHandler.post(cmd);
+        this.protocolHandler.post(cmd, false);
     }
 
     sendResContent(tur: Tour, bytes: Buffer, ofs: number, len: number, lis: DataConsumeListener): void {
         let cmd = new CmdStdOut(tur.req.key, bytes, ofs, len);
-        this.protocolHandler.post(cmd, lis);
+        this.protocolHandler.post(cmd, false, lis);
     }
 
     sendEndTour(tur: Tour, lis: DataConsumeListener): void {
@@ -130,7 +130,7 @@ export class FcgInboundHandler implements InboundHandler, FcgHandler {
 
         // Send empty stdout command
         let cmd: FcgCommand = new CmdStdOut(tur.req.key);
-        this.protocolHandler.post(cmd);
+        this.protocolHandler.post(cmd, true);
 
         // Send end request command
         cmd = new CmdEndRequest(tur.req.key);
@@ -139,7 +139,7 @@ export class FcgInboundHandler implements InboundHandler, FcgHandler {
         };
 
         try {
-            this.protocolHandler.post(cmd, () => {
+            this.protocolHandler.post(cmd, true, () => {
                 BayLog.debug("%s call back in sendEndTour: tur=%s", this.ship(), tur);
                 ensureFunc();
                 lis();

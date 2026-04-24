@@ -281,7 +281,7 @@ export class WarpShip extends Ship {
             if(cmd == null)
                 listener()
             else
-                this.protocolHandler.commandPacker.post(this, cmd, listener)
+                this.protocolHandler.commandPacker.post(this, cmd, true, listener)
         }
     }
 
@@ -292,7 +292,7 @@ export class WarpShip extends Ship {
             if(cmd == null)
                 lis()
             else
-                this.protocolHandler.commandPacker.post(this, cmd, lis)
+                this.protocolHandler.commandPacker.post(this, cmd, true, lis)
         }
         this.cmdBuf = []
     }

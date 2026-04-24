@@ -157,7 +157,7 @@ export class Tour implements Reusable{
 
     changeState(checkId: number, newState: number) {
         BayLog.debug("%s change state: %s", this, newState);
-        this.checkTourId(checkId);
+        //this.checkTourId(checkId);
         this.state = newState;
     }
 
@@ -165,9 +165,11 @@ export class Tour implements Reusable{
         if(checkId == Tour.TOUR_ID_NOCHECK)
             return;
 
+        /*
         if(!this.isInitialized()) {
             throw new Sink("%s Tour not initialized", this);
         }
+        */
 
         if(checkId != this.tourId) {
             throw new Sink("%s Invalid tour id : %d", this, this.tourId);

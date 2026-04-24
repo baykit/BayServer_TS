@@ -107,15 +107,17 @@ export class H1InboundHandler implements H1Handler, InboundHandler {
         var resCon: string;
 
         // determine Connection header value
-        if(tur.req.headers.getConnection() != HttpHeaders.CONNECTION_KEEP_ALIVE
-                && tur.req.headers.getConnection() != HttpHeaders.CONNECTION_UNKOWN)
+        let reqConType = tur.req.headers.getConnection();
+        if(reqConType != HttpHeaders.CONNECTION_KEEP_ALIVE
+                && reqConType != HttpHeaders.CONNECTION_UNKOWN)
             // If client doesn't support "Keep-Alive", set "Close"
             resCon = "Close";
         else {
             resCon = "Keep-Alive";
             // Client supports "Keep-Alive"
-            if (tur.res.headers.getConnection() != HttpHeaders.CONNECTION_KEEP_ALIVE
-                    && tur.res.headers.getConnection() != HttpHeaders.CONNECTION_UNKOWN) {
+            let resConType = tur.res.headers.getConnection();
+            if (resConType != HttpHeaders.CONNECTION_KEEP_ALIVE
+                    && resConType != HttpHeaders.CONNECTION_UNKOWN) {
                 // If tour doesn't need "Keep-Alive"
                 if (tur.res.headers.contentLength() == -1) {
                     // If content-length not specified
@@ -138,13 +140,13 @@ export class H1InboundHandler implements H1Handler, InboundHandler {
         }
 
         let cmd: CmdHeader = CmdHeader.newResHeader(tur.res.headers, tur.req.protocol);
-        this.protocolHandler.post(cmd, null);
+        this.protocolHandler.post(cmd, false, null);
     }
 
 
     sendResContent(tur: Tour, bytes: Buffer, ofs: number, len: number, lis: DataConsumeListener) {
         let cmd = new CmdContent(bytes, ofs, len);
-        this.protocolHandler.post(cmd, lis);
+        this.protocolHandler.post(cmd, false, lis);
     }
 
     sendEndTour(tur: Tour, lis: DataConsumeListener) {
@@ -165,7 +167,7 @@ export class H1InboundHandler implements H1Handler, InboundHandler {
 
         let cmd = new CmdEndContent();
         try {
-            this.protocolHandler.post(cmd, () => {
+            this.protocolHandler.post(cmd, true, () => {
                 BayLog.debug("%s call back of end content command: tur=%s", sip, tur);
                 ensureFunc();
                 lis();
@@ -276,7 +278,8 @@ export class H1InboundHandler implements H1Handler, InboundHandler {
 
             if (reqContLen <= 0) {
                 this.endReqContent(this.curTourId, tur);
-                return NextSocketAction.SUSPEND; // end reading
+                //return NextSocketAction.SUSPEND; // end reading
+                return NextSocketAction.CONTINUE; // continue reading
             } else {
                 this.changeState(H1InboundHandler.STATE_READ_CONTENT);
                 return NextSocketAction.CONTINUE;
@@ -384,7 +387,7 @@ export class H1InboundHandler implements H1Handler, InboundHandler {
         HttpUtil.parseAuthrization(tur);
 
         // Get remote address
-        let clientAdr = tur.req.headers.get(HttpHeaders.X_FORWARDED_FOR);
+        let clientAdr = tur.req.headers.getFast(HttpHeaders.X_FORWARDED_FOR);
         let skt = (this.ship().rudder as SocketRudder).socket();
         if (clientAdr != null) {
             tur.req.remoteAddress = clientAdr;

@@ -61,9 +61,9 @@ export class TourStore {
     }
 
     Return(key: BigInt) : void {
-        if(!this.activeTourMap.has(key)){
-            throw new Sink("Tour is not active key=: " + key);
-        }
+        //if(!this.activeTourMap.has(key)){
+        //    throw new Sink("Tour is not active key=: " + key);
+        //}
         //BayLog.debug("return: key=%d Active tour count: before=%d", key, activeTourMap.size());
         let tur = this.activeTourMap.get(key)
         this.activeTourMap.delete(key)

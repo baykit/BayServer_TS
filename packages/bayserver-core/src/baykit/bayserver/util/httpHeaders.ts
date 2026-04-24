@@ -13,23 +13,23 @@ export class HttpHeaders {
     static readonly CONTENT_LENGTH: string = "content-length";
     static readonly CONTENT_ENCODING: string = "content-encoding";
     static readonly HDR_TRANSFER_ENCODING: string = "Transfer-Encoding";
-    static readonly CONNECTION: string = "Connection";
-    static readonly AUTHORIZATION: string = "Authorization";
+    static readonly CONNECTION: string = "connection";
+    static readonly AUTHORIZATION: string = "authorization";
     static readonly WWW_AUTHENTICATE: string = "WWW-Authenticate";
     static readonly STATUS: string = "Status";
     static readonly LOCATION: string = "Location";
-    static readonly HOST: string = "Host";
+    static readonly HOST: string = "host";
     static readonly COOKIE: string = "Cookie";
     static readonly USER_AGENT: string = "User-Agent";
     static readonly ACCEPT: string = "Accept";
-    static readonly ACCEPT_LANGUAGE: string = "Accept-Language";
-    static readonly ACCEPT_ENCODING: string = "Accept-Encoding";
+    static readonly ACCEPT_LANGUAGE: string = "accept-language";
+    static readonly ACCEPT_ENCODING: string = "accept-encoding";
     static readonly UPGRADE_INSECURE_REQUESTS: string = "Upgrade-Insecure-Requests";
     static readonly SERVER: string = "Server";
-    static readonly X_FORWARDED_HOST: string = "X-Forwarded-Host";
-    static readonly X_FORWARDED_FOR: string = "X-Forwarded-For";
-    static readonly X_FORWARDED_PROTO: string = "X-Forwarded-Proto";
-    static readonly X_FORWARDED_PORT: string = "X-Forwarded-Port";
+    static readonly X_FORWARDED_HOST: string = "x-forwarded-host";
+    static readonly X_FORWARDED_FOR: string = "x-forwarded-for";
+    static readonly X_FORWARDED_PROTO: string = "x-forwarded-proto";
+    static readonly X_FORWARDED_PORT: string = "x-forwarded-port";
 
     static readonly CONNECTION_CLOSE: number = 1;
     static readonly CONNECTION_KEEP_ALIVE: number = 2;
@@ -65,7 +65,17 @@ export class HttpHeaders {
         if (name == null)
             throw new Error("nullPo");
 
-        let values = this.headers.get(StrUtil.toLowerCase(name))
+        return this.getFast(StrUtil.toLowerCase(name))
+    }
+
+    /**
+     * Get the header value as string (Fast version)
+     */
+    getFast(name: string): string {
+        if (name == null)
+            throw new Error("nullPo");
+
+        let values = this.headers.get(name)
         if(values == null)
             return null;
         return values[0];
@@ -91,7 +101,18 @@ export class HttpHeaders {
         if (value == null)
             throw new Error("nullPo")
 
-        name = StrUtil.toLowerCase(name);
+        this.setFast(StrUtil.toLowerCase(name), value)
+    }
+
+    /**
+     * Update the header value by string (Fast version)
+     */
+    setFast(name: string, value: string) {
+        if (name == null)
+            throw new Error("nullPo")
+        if (value == null)
+            throw new Error("nullPo")
+
         let values = this.headers.get(name);
         if(values == null) {
             values = [];
@@ -105,16 +126,14 @@ export class HttpHeaders {
      * Add a header value by string
      */
     add(name: string, value: string) {
-        if (name == null)
-            throw new Error("nullPo")
-        if (value == null)
+        if (name == null || value == null)
             throw new Error("nullPo")
 
-        name = StrUtil.toLowerCase(name);
-        let values = this.headers.get(name);
+        let key = StrUtil.toLowerCase(name);
+        let values = this.headers.get(key);
         if(values == null) {
             values = []
-            this.headers.set(name, values)
+            this.headers.set(key, values)
         }
         values.push(value);
     }
@@ -162,11 +181,11 @@ export class HttpHeaders {
     // Useful methods
     //////////////////////////////////////////////////////
     contentType(): string {
-        return this.get(HttpHeaders.CONTENT_TYPE);
+        return this.getFast(HttpHeaders.CONTENT_TYPE);
     }
 
     setContentType(type: string) {
-        this.set(HttpHeaders.CONTENT_TYPE, type);
+        this.setFast(HttpHeaders.CONTENT_TYPE, type);
     }
 
     /**
@@ -176,7 +195,7 @@ export class HttpHeaders {
      *         -1.
      */
     contentLength(): number {
-        let length = this.get(HttpHeaders.CONTENT_LENGTH);
+        let length = this.getFast(HttpHeaders.CONTENT_LENGTH);
         if (StrUtil.empty(length))
             return -1;
         else
@@ -184,11 +203,11 @@ export class HttpHeaders {
     }
 
     setContentLength(length: number) {
-        this.set(HttpHeaders.CONTENT_LENGTH, length.toString());
+        this.setFast(HttpHeaders.CONTENT_LENGTH, length.toString());
     }
 
     getConnection() {
-        let con = this.get(HttpHeaders.CONNECTION);
+        let con = this.getFast(HttpHeaders.CONNECTION);
         if (con !== null)
             con = StrUtil.toLowerCase(con);
 

@@ -3,14 +3,9 @@ import {Transporter} from "./transporter";
 import {Multiplexer} from "./multiplexer";
 import {WriteUnit} from "../agent/multiplexer/writeUnit";
 import {Reusable} from "../util/Reusable";
-import {Counter} from "../util/counter";
-import {Sink} from "../sink";
 
 export class RudderState implements Reusable {
-    static readonly STATE_ID_NOCHECK: number = -1;
-    private static idCounter: Counter = new Counter()
 
-    id: number
     rudder: Rudder
     transporter: Transporter
     multiplexer: Multiplexer
@@ -28,6 +23,7 @@ export class RudderState implements Reusable {
     closed: boolean = false
     finale: boolean = false
     timeoutSec: number = 0
+    bufsize: number = 0
 
 
     constructor() {
@@ -36,21 +32,20 @@ export class RudderState implements Reusable {
     init(rd: Rudder, tp: Transporter = null, timeoutSec: number = 0): void {
         if (rd == null)
             throw new Error("nullPo");
-        this.id = RudderState.idCounter.next()
         this.rudder = rd
         this.transporter = tp
         this.closed = false
         this.timeoutSec = timeoutSec
         if (tp != null) {
-            this.readBuf = Buffer.alloc(tp.getReadBufferSize())
+            this.bufsize = tp.getReadBufferSize()
         }
         else {
-            this.readBuf = Buffer.alloc(8192)
+            this.bufsize = 8192
         }
+        this.readBuf = Buffer.alloc(this.bufsize)
     }
 
     reset(): void {
-        this.id = 0
         this.rudder = null
         this.transporter = null
         this.multiplexer = null
@@ -65,10 +60,19 @@ export class RudderState implements Reusable {
         this.closed = false
         this.finale = false
         this.timeoutSec = 0
+        this.bufsize = 0
+    }
+
+    remaining(): number {
+        let total = 0
+        for (const unit of this.writeQueue) {
+            total += unit.buf.length
+        }
+        return total
     }
 
     toString(): string {
-        let s = "st(id=" + this.id + " rd=" + this.rudder + " mpx=" + this.multiplexer + " tp=" + this.transporter + ")"
+        let s = "st(rd=" + this.rudder + " mpx=" + this.multiplexer + " tp=" + this.transporter + ")"
 
         if(this.closing)
             s += " closing"
@@ -78,13 +82,5 @@ export class RudderState implements Reusable {
 
     access(): void {
         this.lastAccessTime = Date.now()
-    }
-
-    checkStateId(checkId: number): void {
-        if(checkId == RudderState.STATE_ID_NOCHECK)
-            return
-        if(checkId != this.id) {
-            throw new Sink("%s Invalid state id : %d", this, checkId)
-        }
     }
 }

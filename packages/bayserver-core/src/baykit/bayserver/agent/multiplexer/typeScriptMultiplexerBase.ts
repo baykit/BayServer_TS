@@ -34,32 +34,32 @@ export abstract class TypeScriptMultiplexerBase extends MultiplexerBase implemen
         st.rudder.registerReadHandler((buf, n) => {
             BayLog.debug("%s read %d bytes", this, n)
             st.readBuf = buf
-            this.agent.sendReadLetter(st.id, st.rudder, this, n, null, true);
+            this.agent.sendReadLetter(st.rudder, this, n, null, true);
         })
 
         st.rudder.registerWriteHandler(n => {
-            this.agent.sendWroteLetter(st.id, st.rudder, this, n, true);
+            this.agent.sendWroteLetter(st.rudder, this, n, true);
         })
 
         st.rudder.registerErrorHandler(e => {
             BayLog.error_e(e, "%s Read error: %s", this, e)
-            this.agent.sendErrorLetter(st.id, st.rudder, this, new IOException(e.message), true);
+            this.agent.sendErrorLetter(st.rudder, this, new IOException(e.message), true);
         })
 
         st.rudder.registerCloseHandler(() => {
             BayLog.debug("%s closed: rd=%s", this, st.rudder)
-            this.agent.sendClosedLetter(st.id, st.rudder, this, true)
+            this.agent.sendClosedLetter(st.rudder, this, true)
         })
 
         if (st.rudder instanceof ServerRudder) {
             let sktRd: ServerRudder = st.rudder
             sktRd.server.on('connection',  (socket: Socket) => {
-                this.agent.sendAcceptedLetter(st.id, st.rudder, this, new SocketRudder(socket), true)
+                this.agent.sendAcceptedLetter(st.rudder, this, new SocketRudder(socket), true)
             });
         }
     }
 
-    reqWrite(rd: Rudder, buf: Buffer, adr: string, tag: Object, listener: DataConsumeListener): void {
+    reqWrite(rd: Rudder, buf: Buffer, adr: string, tag: Object, flush: boolean, listener: DataConsumeListener): void {
         let st = this.getRudderState(rd)
         BayLog.debug("%s reqWrite: rd=%s st=%s len=%d", this.agent, rd, st, buf.length);
         if(st == null || st.closing) {

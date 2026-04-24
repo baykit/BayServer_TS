@@ -73,7 +73,7 @@ export class TourRes implements Reusable{
     }
 
     sendHeaders(checkId: number) {
-        this.tour.checkTourId(checkId);
+        //this.tour.checkTourId(checkId);
 
         if (this.tour.isZombie())
             return;
@@ -89,7 +89,7 @@ export class TourRes implements Reusable{
             this.headers.contains(HttpHeaders.CONTENT_TYPE) &&
             this.headers.contentType().toLowerCase().startsWith("text/") &&
             !this.headers.contains(HttpHeaders.CONTENT_ENCODING)) {
-            let enc = this.tour.req.headers.get(HttpHeaders.ACCEPT_ENCODING);
+            let enc = this.tour.req.headers.getFast(HttpHeaders.ACCEPT_ENCODING);
             if (enc != null) {
                 let parts = enc.split(",");
                 for (const part of parts) {
@@ -173,7 +173,7 @@ export class TourRes implements Reusable{
     sendResContent(checkId: number, buf: Buffer, ofs: number, len: number) {
         if (buf == null)
             throw new Error("nullPo");
-        this.tour.checkTourId(checkId);
+        //this.tour.checkTourId(checkId);
         BayLog.trace("%s send content: len=%d", this, len);
 
 
@@ -229,7 +229,7 @@ export class TourRes implements Reusable{
     }
 
     endResContent(chkId: number) {
-        this.tour.checkTourId(chkId);
+        //this.tour.checkTourId(chkId);
 
         BayLog.debug("%s end ResContent", this);
         if (this.tour.isEnded()) {
@@ -299,7 +299,7 @@ export class TourRes implements Reusable{
         message: string = "",
         e: Error = null) {
 
-        this.tour.checkTourId(chkId);
+        //this.tour.checkTourId(chkId);
 
         if (this.tour.isZombie())
             return;
@@ -337,7 +337,7 @@ export class TourRes implements Reusable{
     }
 
     private sendRedirect(chkId: number, status: number, location: string): void {
-        this.tour.checkTourId(chkId);
+        //this.tour.checkTourId(chkId);
 
         if(this.headerSent) {
             BayLog.error("Try to redirect after response header is sent (Ignore)");

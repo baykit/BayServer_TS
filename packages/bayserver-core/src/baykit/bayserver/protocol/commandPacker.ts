@@ -30,12 +30,12 @@ export class CommandPacker<C extends Command<C, P, H>, P extends Packet, H exten
     // Custom methods
     //////////////////////////////////////////////////////
 
-    public post(sip: Ship, cmd: C, listener: DataConsumeListener = null): void {
+    public post(sip: Ship, cmd: C, flush: boolean, listener: DataConsumeListener = null): void {
         let pkt: P  = this.pktStore.rent(cmd.type);
 
         try {
             cmd.pack(pkt);
-            this.pktPacker.post(sip, pkt, () => {
+            this.pktPacker.post(sip, pkt, flush, () => {
                 //BayLog.debug("%s callback & return packet", sip)
                 this.pktStore.Return(pkt);
                 if (listener != null)

@@ -78,7 +78,7 @@ export abstract class ProtocolHandler <C extends Command<C, P, CommandHandler<C>
         return this.packetUnpacker.bytesReceived(buf);
     }
 
-    post(cmd: C, listener: DataConsumeListener = null): void {
-        this.commandPacker.post(this.ship, cmd, listener)
+    post(cmd: C, flush: boolean, listener: DataConsumeListener = null): void {
+        this.commandPacker.post(this.ship, cmd, flush, listener)
     }
 }

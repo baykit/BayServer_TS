@@ -53,24 +53,27 @@ class ProtocolInfo<P extends Packet> {
 /**
  * Packet pool
  * @param <P> Packet
- * @param <T> Type of packet
  */
 export class PacketStore<P extends Packet> implements Reusable {
 
     static protoMap: {[key: string]: ProtocolInfo<any>} = {};
 
     readonly protocol: string;
-    readonly storeMap: {[key: number]: ObjectStore<P>} = {}
+    readonly storeMap: ObjectStore<P>[] = []
     readonly factory: PacketFactory<P>;
 
     constructor(protocol: string, factory: PacketFactory<P>) {
         this.protocol = protocol;
         this.factory = factory;
+        for(let i = 0; i < 128; i++) {
+            this.storeMap.push(null);
+        }
     }
 
     reset(): void {
-        for(const [type, store] of Object.entries(this.storeMap)) {
-            store.reset();
+        for(const store of this.storeMap) {
+            if(store != null)
+                store.reset();
         }
     }
 
@@ -93,11 +96,13 @@ export class PacketStore<P extends Packet> implements Reusable {
      * print memory usage
      */
     printUsage(indent: number): void {
-        BayLog.info("%sPacketStore(%s) usage nTypes=%d", StrUtil.indent(indent), this.protocol, Object.entries(this.storeMap).length);
-        Object.keys(this.storeMap).forEach(type => {
-            BayLog.info("%sType: %s", StrUtil.indent(indent+1), type);
-            this.storeMap[type].printUsage(indent+2);
-        });
+        BayLog.info("%sPacketStore(%s) usage nTypes=%d", StrUtil.indent(indent), this.protocol, this.storeMap.length);
+        for(let i = 0; i < this.storeMap.length; i++) {
+            if(this.storeMap[i] != null) {
+                BayLog.info("%sType: %d", StrUtil.indent(indent+1), i);
+                this.storeMap[i].printUsage(indent+2);
+            }
+        }
     }
 
 

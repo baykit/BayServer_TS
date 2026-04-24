@@ -5,8 +5,8 @@ import {Multiplexer} from "../../common/multiplexer";
 export class ErrorLetter extends Letter {
     err: Error
 
-    constructor(stateId: number, rd: Rudder, mpx: Multiplexer, e: Error) {
-        super(stateId, rd, mpx)
+    constructor(rd: Rudder, mpx: Multiplexer, e: Error) {
+        super(rd, mpx)
         this.err = e;
     }
 }

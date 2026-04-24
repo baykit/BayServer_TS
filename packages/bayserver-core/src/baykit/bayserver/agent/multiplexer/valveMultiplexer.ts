@@ -49,7 +49,7 @@ export class ValveMultiplexer extends TypeScriptMultiplexerBase {
         }
 
         let callback = () => {
-            this.agent.sendConnectedLetter(st.id, st.rudder, this, true);
+            this.agent.sendConnectedLetter(st.rudder, this, true);
         }
 
         let socket = (rd as SocketRudder).socket()

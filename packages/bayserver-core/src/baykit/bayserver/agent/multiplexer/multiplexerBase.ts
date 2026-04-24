@@ -14,7 +14,7 @@ export abstract class MultiplexerBase implements Multiplexer {
 
     channelCount: number
     readonly agent: GrandAgent
-    readonly rudders: Map<Object, RudderState> = new Map()
+    readonly rudders: Set<Rudder> = new Set()
 
     protected constructor(agt: GrandAgent) {
         this.agent = agt
@@ -39,21 +39,23 @@ export abstract class MultiplexerBase implements Multiplexer {
     abstract reqClose(rd: Rudder): void
     abstract reqConnect(rd: Rudder, addr: string, port: number): void
     abstract reqRead(rd: Rudder): void
-    abstract reqWrite(rd: Rudder, buf: Buffer, adr: string, tag: Object, listener: DataConsumeListener): void
+    abstract reqWrite(rd: Rudder, buf: Buffer, adr: string, tag: Object, flush: boolean, listener: DataConsumeListener): void
     abstract shutdown(): void
     abstract useAsyncAPI(): boolean
 
     addRudderState(rd: Rudder, st: RudderState): void {
         BayLog.trace("%s add rd=%s chState=%s", this.agent, rd, st);
         st.multiplexer = this;
-        this.rudders.set(rd.key(), st)
+        rd.state = st
+        this.rudders.add(rd)
         this.channelCount++;
 
         st.access();
     }
 
     removeRudderState(rd: Rudder): void {
-        this.rudders.delete(rd.key())
+        rd.state = null
+        this.rudders.delete(rd)
         this.channelCount--
     }
 
@@ -88,7 +90,7 @@ export abstract class MultiplexerBase implements Multiplexer {
     }
 
     getRudderState(rd: Rudder): RudderState {
-        return this.findRudderStateByKey(rd.key())
+        return rd.state as RudderState
     }
 
     getTransporter(rd: Rudder): Transporter {
@@ -107,24 +109,25 @@ export abstract class MultiplexerBase implements Multiplexer {
     // Implements Multiplexer
     //////////////////////////////////////////////////////
 
-    protected findRudderStateByKey(rdKey: Object): RudderState {
-        return this.rudders.get(rdKey)
-    }
-
     protected closeTimeoutSockets(): void {
         if (this.rudders.size == 0)
             return;
 
-        let closeList = [];
         let now = Date.now();
 
-        for (const st of this.rudders.values()) {
+        for (const rd of Array.from(this.rudders)) {
+            if (rd.closed()) {
+                this.rudders.delete(rd)
+                continue
+            }
+            let st = rd.state as RudderState
             if (st.transporter != null) {
                 try {
                     let durationSec = Math.floor((now - st.lastAccessTime) / 1000);
-                    if (st.transporter.checkTimeout(st.rudder, durationSec)) {
-                        BayLog.debug("%s timed out rudder found: rd=%s", this.agent, st.rudder);
-                        closeList.push(st);
+                    if (st.transporter.checkTimeout(rd, durationSec)) {
+                        BayLog.debug("%s timed out rudder found: rd=%s", this.agent, rd);
+                        this.reqClose(rd);
+                        this.rudders.delete(rd);
                     }
                 }
                 catch (e) {
@@ -132,21 +135,19 @@ export abstract class MultiplexerBase implements Multiplexer {
                         throw e;
                     else {
                         BayLog.error_e(e);
-                        closeList.push(st);
+                        this.reqClose(rd);
+                        this.rudders.delete(rd);
                     }
                 }
             }
-        }
-        for (const st of closeList) {
-            this.reqClose(st.rudder);
         }
     }
 
     closeAll(): void {
         BayLog.error("closeAll")
-        for (const st of this.rudders.values()) {
-            /*if(st.rudder != this.agent.commandReceiver)
-                this.reqClose(st.rudder);*/
+        for (const rd of Array.from(this.rudders)) {
+            /*if(rd != this.agent.commandReceiver)
+                this.reqClose(rd);*/
         }
     }
 }

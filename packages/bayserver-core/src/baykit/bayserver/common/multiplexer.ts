@@ -20,7 +20,7 @@ export interface Multiplexer {
 
     reqRead(rd: Rudder): void
 
-    reqWrite(rd: Rudder, buf: Buffer, adr: string, tag: Object, listener: DataConsumeListener): void
+    reqWrite(rd: Rudder, buf: Buffer, adr: string, tag: Object, flush: boolean, listener: DataConsumeListener): void
 
     reqClose(rd: Rudder): void
 

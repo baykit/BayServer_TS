@@ -152,12 +152,12 @@ export class GrandAgent {
                 while (this.letterQueue.length > 0) {
                     let letter = this.letterQueue.shift()
 
+                    this.checkRudderState(letter.rudder)
                     let st = letter.multiplexer.getRudderState(letter.rudder)
                     if(st == null) {
                         BayLog.debug("%s rudder is already returned: %s", this, letter.rudder)
                         continue
                     }
-                    st.checkStateId(letter.stateId)
 
                     if(letter instanceof AcceptedLetter) {
                         this.onAccepted(letter, st)
@@ -235,40 +235,40 @@ export class GrandAgent {
         this.netMultiplexer.reqRead(this.commandReceiver.rudder)
     }
 
-    sendAcceptedLetter(stateId: number, rd: Rudder, mpx: Multiplexer, clientRd: Rudder, wakeup: boolean): void {
+    sendAcceptedLetter(rd: Rudder, mpx: Multiplexer, clientRd: Rudder, wakeup: boolean): void {
         if(rd == null)
             throw new Sink();
-        this.sendLetter(new AcceptedLetter(stateId, rd, mpx, clientRd), wakeup);
+        this.sendLetter(new AcceptedLetter(rd, mpx, clientRd), wakeup);
     }
 
-    sendConnectedLetter(stateId: number, rd: Rudder, mpx: Multiplexer, wakeup: boolean): void {
+    sendConnectedLetter(rd: Rudder, mpx: Multiplexer, wakeup: boolean): void {
         if(rd == null)
             throw new Sink();
-        this.sendLetter(new ConnectedLetter(stateId, rd, mpx), wakeup);
+        this.sendLetter(new ConnectedLetter(rd, mpx), wakeup);
     }
 
-    sendReadLetter(stateId: number, rd: Rudder, mpx: Multiplexer, n: number, adr: string, wakeup: boolean): void {
+    sendReadLetter(rd: Rudder, mpx: Multiplexer, n: number, adr: string, wakeup: boolean): void {
         if(rd == null)
             throw new Sink();
-        this.sendLetter(new ReadLetter(stateId, rd, mpx, n, adr), wakeup);
+        this.sendLetter(new ReadLetter(rd, mpx, n, adr), wakeup);
     }
 
-    sendWroteLetter(stateId: number, rd: Rudder, mpx: Multiplexer, n: number, wakeup: boolean): void {
+    sendWroteLetter(rd: Rudder, mpx: Multiplexer, n: number, wakeup: boolean): void {
         if(rd == null)
             throw new Sink();
-        this.sendLetter(new WroteLetter(stateId, rd, mpx, n), wakeup);
+        this.sendLetter(new WroteLetter(rd, mpx, n), wakeup);
     }
 
-    sendClosedLetter(stateId: number, rd: Rudder, mpx: Multiplexer, wakeup: boolean): void {
+    sendClosedLetter(rd: Rudder, mpx: Multiplexer, wakeup: boolean): void {
         if(rd == null)
             throw new Sink();
-        this.sendLetter(new ClosedLetter(stateId, rd, mpx), wakeup);
+        this.sendLetter(new ClosedLetter(rd, mpx), wakeup);
     }
 
-    sendErrorLetter(stateId: number, rd: Rudder, mpx: Multiplexer, e: Error, wakeup: boolean): void {
+    sendErrorLetter(rd: Rudder, mpx: Multiplexer, e: Error, wakeup: boolean): void {
         if(rd == null)
             throw new Sink();
-        this.sendLetter(new ErrorLetter(stateId, rd, mpx, e), wakeup);
+        this.sendLetter(new ErrorLetter(rd, mpx, e), wakeup);
     }
 
     reloadCert() {
@@ -486,8 +486,10 @@ export class GrandAgent {
             BayLog.debug("%s wrote %d bytes rd=%s qlen=%d", this, letter.nBytes, st.rudder, st.writeQueue.length);
             st.bytesWrote += letter.nBytes;
 
-            if(st.writeQueue.length == 0)
-                throw new Sink(this + " Write queue is empty: rd=" + st.rudder);
+            if(st.writeQueue.length == 0) {
+                BayLog.debug("%s Write queue is empty: rd=%s", this, st.rudder);
+                return;
+            }
 
             st.multiplexer.consumeOldestUnit(st)
 
@@ -652,5 +654,10 @@ export class GrandAgent {
     // Other methods
     //////////////////////////////////////////////////////
 
-
+    private checkRudderState(rd: Rudder): void {
+        let st = rd.state as RudderState
+        if(st != null && st.rudder != rd) {
+            throw new Sink("%s Invalid rd=%s st=%s", this, rd, st)
+        }
+    }
 }

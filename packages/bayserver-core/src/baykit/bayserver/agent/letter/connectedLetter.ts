@@ -4,7 +4,7 @@ import {Multiplexer} from "../../common/multiplexer";
 
 export class ConnectedLetter extends Letter {
 
-    constructor(stateId: number, rd: Rudder, mpx: Multiplexer) {
-        super(stateId, rd, mpx)
+    constructor(rd: Rudder, mpx: Multiplexer) {
+        super(rd, mpx)
     }
 }

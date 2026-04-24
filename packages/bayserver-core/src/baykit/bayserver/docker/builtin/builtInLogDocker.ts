@@ -187,6 +187,7 @@ export class BuiltInLogDocker extends DockerBase implements Log {
                 Buffer.from(sb + os.EOL),
                 null,
                 "log",
+                true,
                 null
             )
         }

@@ -104,12 +104,12 @@ export class AjpInboundHandler implements InboundHandler, AjpHandler {
             }
         }
         cmd.setStatus(tur.res.headers.status);
-        this.protocolHandler.post(cmd);
+        this.protocolHandler.post(cmd, false);
     }
 
     sendResContent(tur: Tour, bytes: Buffer, ofs: number, len: number, lis: DataConsumeListener): void {
         let cmd = new CmdSendBodyChunk(bytes, ofs, len);
-        this.protocolHandler.post(cmd, lis);
+        this.protocolHandler.post(cmd, false, lis);
     }
 
     sendEndTour(tur: Tour, lis: DataConsumeListener): void {
@@ -123,7 +123,7 @@ export class AjpInboundHandler implements InboundHandler, AjpHandler {
         };
 
         try {
-            this.protocolHandler.post(cmd, () => {
+            this.protocolHandler.post(cmd, true, () => {
                 BayLog.debug("%s call back in sendEndTour: tur=%s", this.ship(), tur);
                 ensureFunc();
                 lis();
@@ -277,7 +277,7 @@ export class AjpInboundHandler implements InboundHandler, AjpHandler {
                 if(bch.reqLen > AjpPacket.MAX_DATA_LEN) {
                     bch.reqLen = AjpPacket.MAX_DATA_LEN;
                 }
-                this.protocolHandler.post(bch);
+                this.protocolHandler.post(bch, true);
 
                 if(!success)
                     return NextSocketAction.SUSPEND;

@@ -10,7 +10,7 @@ export class PacketPacker<P extends Packet> implements Reusable {
 
     }
 
-    public post(sip: Ship, pkt: P , listener: DataConsumeListener): void {
+    public post(sip: Ship, pkt: P, flush: boolean, listener: DataConsumeListener): void {
         if(listener == null)
             throw new Error();
 
@@ -22,6 +22,7 @@ export class PacketPacker<P extends Packet> implements Reusable {
             buf,
             null,
             pkt,
+            flush,
             listener
         )
     }

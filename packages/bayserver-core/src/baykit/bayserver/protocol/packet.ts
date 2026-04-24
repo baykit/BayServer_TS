@@ -29,8 +29,7 @@ export abstract class Packet implements Reusable {
     }
 
     public reset(): void {
-        // Clear header region for security; leave the payload region untouched
-        this.buf.fill(0, 0, this.headerLen)
+        //this.buf.fill(0, 0, this.headerLen)
         this.bufLen = this.headerLen;
     }
 

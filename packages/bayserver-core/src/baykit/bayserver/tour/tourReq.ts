@@ -130,7 +130,7 @@ export class TourReq implements Reusable {
     }
 
     postReqContent(checkId: number, data: Buffer, start: number, len: number, lis: ContentConsumeListener): boolean {
-        this.tour.checkTourId(checkId);
+        //this.tour.checkTourId(checkId);
 
         let dataPassed = false
 
@@ -179,7 +179,7 @@ export class TourReq implements Reusable {
 
     endContent(checkId: number) {
         BayLog.debug(this.tour + " endReqContent");
-        this.tour.checkTourId(checkId);
+        //this.tour.checkTourId(checkId);
         if (this.ended)
             throw new Sink(this.tour + " Request content is already ended");
 

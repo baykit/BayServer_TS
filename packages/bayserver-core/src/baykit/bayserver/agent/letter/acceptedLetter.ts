@@ -5,8 +5,8 @@ import {Multiplexer} from "../../common/multiplexer";
 export class AcceptedLetter extends Letter {
     clientRudder: Rudder
 
-    constructor(stateId: number, rd: Rudder, mpx: Multiplexer, clientRd: Rudder) {
-        super(stateId, rd, mpx)
+    constructor(rd: Rudder, mpx: Multiplexer, clientRd: Rudder) {
+        super(rd, mpx)
         this.clientRudder = clientRd;
     }
 }

@@ -30,23 +30,26 @@ class ProtocolInfo<C extends Command<C, P, any>, P extends Packet> {
     readonly serverMode: boolean;
     readonly protocolHandlerFactory: ProtocolHandlerFactory<any, any>;
 
-    /** Agent ID => ProtocolHandlerStore */
-    readonly stores: Map<number, ProtocolHandlerStore<C, P>> = null
+    /** stores[agentId - 1] => ProtocolHandlerStore */
+    readonly stores: ProtocolHandlerStore<C, P>[] = null
 
     public constructor(proto: string, svrMode: boolean, protocolHandlerFactory: ProtocolHandlerFactory<C, P>) {
         this.protocol = proto;
         this.serverMode = svrMode
         this.protocolHandlerFactory = protocolHandlerFactory;
-        this.stores = new Map()
+        this.stores = []
     }
 
     addAgent(agtId: number): void {
        let store: PacketStore<P> = PacketStore.getStore(this.protocol, agtId);
-       this.stores.set(agtId, new ProtocolHandlerStore(this.protocol, this.serverMode, this.protocolHandlerFactory, store))
+       while(this.stores.length < agtId) {
+           this.stores.push(null)
+       }
+       this.stores[agtId-1] = new ProtocolHandlerStore(this.protocol, this.serverMode, this.protocolHandlerFactory, store)
     }
 
     removeAgent(agtId: number): void {
-        this.stores.delete(agtId)
+        this.stores[agtId-1] = null
     }
 }
 
@@ -89,13 +92,13 @@ export class ProtocolHandlerStore<C extends Command<C, P, any>, P extends Packet
         svrMode: boolean,
         agentId: number) : ProtocolHandlerStore<any, any> {
 
-        return this.protoMap.get(this.getProtocolForm(proto, svrMode)).stores.get(agentId)
+        return this.protoMap.get(this.getProtocolForm(proto, svrMode)).stores[agentId-1]
     }
 
     static getStores(agentId: number) {
         let storeList: ProtocolHandlerStore<any, any>[] = []
         for(const info of this.protoMap.values()) {
-            storeList.push(info.stores.get(agentId))
+            storeList.push(info.stores[agentId-1])
         };
         return storeList;
     }

@@ -13,6 +13,9 @@ export abstract class Rudder {
     id: number
     protected _closed: boolean = false
 
+    // For multiplexer
+    state: any
+
     protected readHandler: ReadHandler
     protected writeHandler: WriteHandler
     protected closeHandler: CloseHandler

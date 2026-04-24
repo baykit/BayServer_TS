@@ -168,19 +168,19 @@ export class H2InboundHandler implements H2Handler, InboundHandler {
                 cmd.flags.setEndHeaders(true)
             }
 
-            this.protocolHandler.post(cmd)
+            this.protocolHandler.post(cmd, false)
         }
     }
 
     sendResContent(tur: Tour, bytes: Buffer, ofs: number, len: number, lis: DataConsumeListener) {
         let cmd = new CmdData(tur.req.key, null, bytes, ofs, len);
-        this.protocolHandler.post(cmd, lis);
+        this.protocolHandler.post(cmd, false, lis);
     }
 
     sendEndTour(tur: Tour, lis: DataConsumeListener) {
         let cmd = new CmdData(tur.req.key, null);
         cmd.flags.setEndStream(true);
-        this.protocolHandler.post(cmd, lis);
+        this.protocolHandler.post(cmd, true, lis);
     }
 
     onProtocolError(e: ProtocolException): boolean {
@@ -191,7 +191,7 @@ export class H2InboundHandler implements H2Handler, InboundHandler {
         cmd.errorCode = H2ErrorCode.PROTOCOL_ERROR;
         cmd.debugData = Buffer.from("Thank you!");
         try {
-            this.protocolHandler.post(cmd);
+            this.protocolHandler.post(cmd, true);
             this.protocolHandler.ship.postClose();
         }
         catch(ex) {
@@ -215,7 +215,7 @@ export class H2InboundHandler implements H2Handler, InboundHandler {
         set.streamId = 0;
         set.items.push(new CmdSettingsItem(CmdSettings.MAX_CONCURRENT_STREAMS, TourStore.MAX_TOURS));
         set.items.push(new CmdSettingsItem(CmdSettings.INITIAL_WINDOW_SIZE, this.windowSize));
-        this.protocolHandler.post(set);
+        this.protocolHandler.post(set, true);
 
         set = new CmdSettings(H2ProtocolHandler.CTL_STREAM_ID);
         set.streamId = 0;
@@ -358,8 +358,8 @@ export class H2InboundHandler implements H2Handler, InboundHandler {
                             let upd2 = new CmdWindowUpdate(0);
                             upd2.windowSizeIncrement = len;
                             try {
-                                this.protocolHandler.post(upd);
-                                this.protocolHandler.post(upd2);
+                                this.protocolHandler.post(upd, false);
+                                this.protocolHandler.post(upd2, true);
                             }
                             catch(e) {
                                 BayLog.error_e(e);
@@ -435,7 +435,7 @@ export class H2InboundHandler implements H2Handler, InboundHandler {
         }
 
         let res = new CmdSettings(0, new H2Flags(H2Flags.FLAGS_ACK));
-        this.protocolHandler.post(res);
+        this.protocolHandler.post(res, true);
         return NextSocketAction.CONTINUE;
     }
 
@@ -458,7 +458,7 @@ export class H2InboundHandler implements H2Handler, InboundHandler {
         BayLog.debug("%s handle_ping: stm=%d", sip, cmd.streamId);
 
         let res = new CmdPing(cmd.streamId, new H2Flags(H2Flags.FLAGS_ACK), cmd.opaqueData);
-        this.protocolHandler.post(res);
+        this.protocolHandler.post(res, true);
         return NextSocketAction.CONTINUE;
     }
 

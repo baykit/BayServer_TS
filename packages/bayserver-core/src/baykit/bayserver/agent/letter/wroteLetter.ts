@@ -5,8 +5,8 @@ import {Multiplexer} from "../../common/multiplexer";
 export class WroteLetter extends Letter {
     nBytes: number
 
-    constructor(stateId: number, rd: Rudder, mpx: Multiplexer, n: number) {
-        super(stateId, rd, mpx)
+    constructor(rd: Rudder, mpx: Multiplexer, n: number) {
+        super(rd, mpx)
         this.nBytes = n
     }
 }
