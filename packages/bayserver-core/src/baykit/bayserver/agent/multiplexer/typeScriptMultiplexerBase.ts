@@ -42,7 +42,7 @@ export abstract class TypeScriptMultiplexerBase extends MultiplexerBase implemen
         })
 
         st.rudder.registerErrorHandler(e => {
-            BayLog.error_e(e, "%s Read error: %s", this, e)
+            BayLog.error_e(e, "%s Read error: %s", this, e.message)
             this.agent.sendErrorLetter(st.rudder, this, new IOException(e.message), true);
         })
 
