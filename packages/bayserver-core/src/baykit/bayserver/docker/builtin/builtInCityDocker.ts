@@ -17,6 +17,15 @@ import {BayServer} from "../../bayserver";
 import {StrUtil} from "../../util/strUtil";
 import {SysUtil} from "../../util/sysUtil";
 import {BayDockers} from "../../bayDockers";
+import {Barge} from "../barge";
+import {Barges} from "../../common/barges";
+import {GrandAgent} from "../../agent/grandAgent";
+import {PlainTransporter} from "../../agent/multiplexer/plainTransporter";
+import {RudderStateStore} from "../../common/rudderStateStore";
+import {WaitCargoShip} from "./waitCargoShip";
+import {Rudder} from "../../rudder/rudder";
+import {ReqContentHandler} from "../../tour/reqContentHandler";
+import {ContentConsumeListener} from "../../tour/contentConsumeListener";
 
 
 export class ClubMatchInfo {
@@ -43,6 +52,7 @@ export class BuiltInCityDocker extends DockerBase implements City {
 
     logList: Log[] = [];
     permissionList: Permission[] = [];
+    barges: Barges = new Barges();
 
     trouble: Trouble;
 
@@ -94,6 +104,9 @@ export class BuiltInCityDocker extends DockerBase implements City {
             case "trouble":
                 this.trouble = dkr as Object as Trouble;
                 break;
+            case "barge":
+                this.barges.add(dkr as Object as Barge);
+                break;
             default:
                 return false;
         }
@@ -112,6 +125,9 @@ export class BuiltInCityDocker extends DockerBase implements City {
     }
     getTowns(): Town[] {
         return this.townList;
+    }
+    findBarge(path: string): Barge {
+        return null;
     }
     enter(tur: Tour) {
         BayLog.debug("%s City[%s] Request URI: %s", tur, this.name, tur.req.uri);
@@ -169,8 +185,74 @@ export class BuiltInCityDocker extends DockerBase implements City {
             let club = mInfo.clubMatch.club;
             tur.town = mInfo.town;
             tur.club = club;
+
+            const barge = this.findBargeFor(tur, mInfo.town);
+            if (barge != null) {
+                const [cgo, rd] = barge.getCargo(tur);
+
+                if (rd != null) {
+                    // Cargo is loading: wait via WaitCargoShip
+                    const agt = GrandAgent.get(tur.ship.agentId);
+                    const waitCargoShip = new WaitCargoShip();
+                    const tp = new PlainTransporter(
+                        agt.netMultiplexer,
+                        waitCargoShip,
+                        true,
+                        8192,
+                        false);
+
+                    waitCargoShip.initWaitCargo(rd, tp, tur, cgo, club);
+                    const st = RudderStateStore.getStore(agt.agentId).rent();
+                    st.init(rd, tp);
+                    agt.netMultiplexer.addRudderState(rd, st);
+                    agt.netMultiplexer.reqRead(rd);
+                    return;
+                }
+                else if (cgo.isOnBarge()) {
+                    // Cargo is ready (on cache)
+                    const cachedHandler: ReqContentHandler = {
+                        onReadReqContent: (tur2: Tour, buf, start: number, len: number, lis: ContentConsumeListener) => {
+                        },
+
+                        onEndReqContent: (tur2: Tour) => {
+                            cgo.getHeaders().copyTo(tur2.res.headers);
+                            tur2.res.sendHeaders(Tour.TOUR_ID_NOCHECK);
+
+                            tur2.res.setConsumeListener((len, resume) => {
+                            });
+
+                            tur2.res.sendResContent(Tour.TOUR_ID_NOCHECK, cgo.getContent(), 0, cgo.getLength());
+                            tur2.res.endResContent(Tour.TOUR_ID_NOCHECK);
+                        },
+
+                        onAbortReq: (tur2: Tour): boolean => {
+                            return false;
+                        }
+                    };
+                    tur.req.setReqContentHandler(cachedHandler);
+                    return;
+                }
+                else {
+                    tur.cargo = cgo;
+                }
+            }
+
             club.arrive(tur);
         }
+    }
+
+    //////////////////////////////////////////////////////
+    // private methods (cargo)
+    //////////////////////////////////////////////////////
+    private findBargeFor(tur: Tour, twn: Town): Barge {
+        let b = twn.findBarge(tur.req.uri);
+        if (b == null) {
+            b = this.barges.findBarge(tur.req.uri);
+            if (b == null) {
+                b = BayServer.harbor.findBarge(tur.req.uri);
+            }
+        }
+        return b;
     }
 
     getTrouble(): Trouble {

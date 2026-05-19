@@ -82,6 +82,10 @@ export abstract class TypeScriptMultiplexerBase extends MultiplexerBase implemen
         st.access()
     }
 
+    reqTransfer(rd: Rudder, fileRd: Rudder, ofs: number, len: number, listener: DataConsumeListener): void {
+        throw new Sink()
+    }
+
     reqClose(rd: Rudder): void {
         let st = this.getRudderState(rd)
         BayLog.debug("%s reqClose st=%s", this.agent, st);

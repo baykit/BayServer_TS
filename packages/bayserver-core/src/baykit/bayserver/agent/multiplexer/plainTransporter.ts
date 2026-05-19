@@ -114,6 +114,10 @@ export class PlainTransporter implements Transporter {
         this.multiplexer.reqWrite(rd, buf, adr, tag, flush, listener)
     }
 
+    reqTransfer(rd: Rudder, fileRd: Rudder, ofs: number, len: number, listener: DataConsumeListener): void {
+        this.multiplexer.reqTransfer(rd, fileRd, ofs, len, listener)
+    }
+
     reqClose(rd: Rudder): void {
         this.closed = true
         this.multiplexer.reqClose(rd)

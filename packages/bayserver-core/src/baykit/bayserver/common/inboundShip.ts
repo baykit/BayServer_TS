@@ -242,6 +242,13 @@ export class InboundShip extends Ship {
     }
 
 
+    transferResContent(chkId: number, tur: Tour, fileRd: Rudder, ofs: number, len: number, lis: () => void) {
+        this.checkShipId(chkId);
+
+        this.tourHandler().transferContent(tur, fileRd, ofs, len, lis);
+    }
+
+
     sendEndTour(chkShipId: number, tur: Tour, callback: () => void) {
         this.checkShipId(chkShipId);
 

@@ -18,3 +18,5 @@ permission          bayserver-core.baykit.bayserver.docker.builtin.builtInPermis
 secure              bayserver-core.baykit.bayserver.docker.builtin.builtInSecureDocker
 trouble             bayserver-core.baykit.bayserver.docker.builtin.builtInTroubleDocker
 reroute:wordpress   bayserver-docker-wordpress.baykit.bayserver.docker.wordpress.wordPressDocker
+barge               bayserver-core.baykit.bayserver.docker.barge.memBargeDocker
+barge:memBarge      bayserver-core.baykit.bayserver.docker.barge.memBargeDocker

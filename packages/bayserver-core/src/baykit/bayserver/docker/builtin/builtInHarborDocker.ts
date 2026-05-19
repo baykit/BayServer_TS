@@ -19,6 +19,8 @@ import {StrUtil} from "../../util/strUtil";
 import {BayServer} from "../../bayserver";
 import {ConfigException} from "../../configException";
 import {Groups} from "../../util/groups";
+import {Barge} from "../barge";
+import {Barges} from "../../common/barges";
 
 export class BuiltInHarborDocker extends DockerBase implements Harbor {
 
@@ -40,9 +42,10 @@ export class BuiltInHarborDocker extends DockerBase implements Harbor {
     static readonly DEFAULT_MULTI_CORE: boolean = true;
     static readonly DEFAULT_GZIP_COMP: boolean = false;
     static readonly DEFAULT_PID_FILE: string = "bayserver.pid";
-    static readonly DEFAULT_ENABLE_CACHE: boolean = false;
-    static readonly DEFAULT_CACHE_LIFESPAN_SEC: number = 60;
-    static readonly DEFAULT_CACHE_SIZE_MB: number = 32;
+    static readonly DEFAULT_DIRECT_BOARDING: boolean = false;
+    static readonly DEFAULT_CARGO_LIFESPAN_SEC: number = 60;
+    static readonly DEFAULT_DIRECT_BOARDINGS: number = 128;
+    static readonly DEFAULT_MAX_CARGO_SIZE: number = 1 * 1024 * 1024;
 
     charset: string = BuiltInHarborDocker.DEFAULT_CHARSET;
     controlPort: number = BuiltInHarborDocker.DEFAULT_CONTROL_PORT;
@@ -65,9 +68,11 @@ export class BuiltInHarborDocker extends DockerBase implements Harbor {
     tourBufferSize: number = BuiltInHarborDocker.DEFAULT_TOUR_BUFFER_SIZE;
     traceHeader: boolean = false;
     trouble: Trouble;
-    enableCache: boolean = BuiltInHarborDocker.DEFAULT_ENABLE_CACHE;
-    cacheLifespanSec: number = BuiltInHarborDocker.DEFAULT_CACHE_LIFESPAN_SEC;
-    cacheSizeMb: number = BuiltInHarborDocker.DEFAULT_CACHE_SIZE_MB;
+    directBoarding: boolean = BuiltInHarborDocker.DEFAULT_DIRECT_BOARDING;
+    cargoLifespanSec: number = BuiltInHarborDocker.DEFAULT_CARGO_LIFESPAN_SEC;
+    maxDirectBoardings: number = BuiltInHarborDocker.DEFAULT_DIRECT_BOARDINGS;
+    maxCargoSize: number = BuiltInHarborDocker.DEFAULT_MAX_CARGO_SIZE;
+    barges: Barges = new Barges();
 
     init(ini: BcfElement, parent: Docker) {
         super.init(ini, parent);
@@ -124,6 +129,11 @@ export class BuiltInHarborDocker extends DockerBase implements Harbor {
                     getMultiplexerTypeName(BuiltInHarborDocker.DEFAULT_CGI_MULTIPLEXER)))
             this.cgiMultiplexer = BuiltInHarborDocker.DEFAULT_CGI_MULTIPLEXER
         }
+
+        if (this.directBoarding != BuiltInHarborDocker.DEFAULT_DIRECT_BOARDING) {
+            BayLog.warn("directBoarding is not supported in the TypeScript port; forcing to %s", BuiltInHarborDocker.DEFAULT_DIRECT_BOARDING)
+            this.directBoarding = BuiltInHarborDocker.DEFAULT_DIRECT_BOARDING
+        }
     }
 
 
@@ -134,7 +144,10 @@ export class BuiltInHarborDocker extends DockerBase implements Harbor {
         switch (dkr.getType()) {
             case "trouble":
                 this.trouble = dkr as Object as Trouble;
-                break
+                return true
+            case "barge":
+                this.barges.add(dkr as Object as Barge);
+                return true
             default:
                 return super.initDocker(dkr);
         }
@@ -278,16 +291,20 @@ export class BuiltInHarborDocker extends DockerBase implements Harbor {
                 this.pidFile = kv.value;
                 break;
 
-            case "enablecache":
-                this.enableCache = StrUtil.parseBool(kv.value);
+            case "directboarding":
+                this.directBoarding = StrUtil.parseBool(kv.value);
                 break;
 
-            case "cachelifespan":
-                this.cacheLifespanSec = Number.parseInt(kv.value);
+            case "cargolifespan":
+                this.cargoLifespanSec = Number.parseInt(kv.value);
                 break;
 
-            case "cachesizemb":
-                this.cacheSizeMb = Number.parseInt(kv.value);
+            case "maxdirectboardings":
+                this.maxDirectBoardings = Number.parseInt(kv.value);
+                break;
+
+            case "maxcargosize":
+                this.maxCargoSize = StrUtil.parseSize(kv.value);
                 break;
         }
         return true;
@@ -354,16 +371,24 @@ export class BuiltInHarborDocker extends DockerBase implements Harbor {
         return this.multiCore;
     }
 
-    isEnableCache(): boolean {
-        return this.enableCache;
+    isDirectBoarding(): boolean {
+        return this.directBoarding;
     }
 
-    getCacheLifespanSec(): number {
-        return this.cacheLifespanSec;
+    getCargoLifespanSec(): number {
+        return this.cargoLifespanSec;
     }
 
-    getCacheSizeMb(): number {
-        return this.cacheSizeMb;
+    getMaxDirectBoardings(): number {
+        return this.maxDirectBoardings;
+    }
+
+    getMaxCargoSize(): number {
+        return this.maxCargoSize;
+    }
+
+    findBarge(path: string): Barge {
+        return this.barges.findBarge(path);
     }
 
     getNumGrandAgents(): number {

@@ -3,6 +3,7 @@ import {Club} from "./club";
 import {Tour} from "../tour/tour";
 import exp = require("constants");
 import {Docker} from "./docker";
+import {Barge} from "./barge";
 
 export const MATCH_TYPE_MATCHED: number = 1;
 export const MATCH_TYPE_NOT_MATCHED: number = 2;
@@ -41,6 +42,11 @@ export interface Town extends Docker {
      * @return club list
      */
     getClubs(): Club[];
+
+    /**
+     * Find barge by path
+     */
+    findBarge(path: string): Barge;
 
     /**
      * Get rerouted uri

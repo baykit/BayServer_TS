@@ -19,6 +19,8 @@ export interface Transporter extends Reusable {
 
     reqWrite(rd: Rudder, buf: Buffer, adr: string, tag: Object, flush: boolean, listener: DataConsumeListener): void
 
+    reqTransfer(rd: Rudder, fileRd: Rudder, ofs: number, len: number, listener: DataConsumeListener): void
+
     reqClose(rd: Rudder): void
 
     checkTimeout(rd: Rudder, durationSec: number): boolean

@@ -40,6 +40,7 @@ export abstract class MultiplexerBase implements Multiplexer {
     abstract reqConnect(rd: Rudder, addr: string, port: number): void
     abstract reqRead(rd: Rudder): void
     abstract reqWrite(rd: Rudder, buf: Buffer, adr: string, tag: Object, flush: boolean, listener: DataConsumeListener): void
+    abstract reqTransfer(rd: Rudder, fileRd: Rudder, ofs: number, len: number, listener: DataConsumeListener): void
     abstract shutdown(): void
     abstract useAsyncAPI(): boolean
 

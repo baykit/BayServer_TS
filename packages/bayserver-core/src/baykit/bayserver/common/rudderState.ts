@@ -23,6 +23,7 @@ export class RudderState implements Reusable {
     closed: boolean = false
     finale: boolean = false
     timeoutSec: number = 0
+    skipFormalities: boolean = false
     bufsize: number = 0
 
 
@@ -60,6 +61,7 @@ export class RudderState implements Reusable {
         this.closed = false
         this.finale = false
         this.timeoutSec = 0
+        this.skipFormalities = false
         this.bufsize = 0
     }
 

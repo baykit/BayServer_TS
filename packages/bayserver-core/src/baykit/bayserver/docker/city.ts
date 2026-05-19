@@ -2,6 +2,7 @@ import {Club} from "./club";
 import {Town} from "./town";
 import {Tour} from "../tour/tour";
 import {Trouble} from "./trouble";
+import {Barge} from "./barge";
 
 export interface City {
 
@@ -23,6 +24,11 @@ export interface City {
      * @return
      */
     getTowns(): Town[];
+
+    /**
+     * Find barge by path
+     */
+    findBarge(path: string): Barge;
 
     /**
      * Enter city

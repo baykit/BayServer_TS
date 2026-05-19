@@ -18,6 +18,19 @@ import {
     TroubleCommand
 } from "../docker/trouble";
 import {Buffer} from "buffer";
+import {Rudder} from "../rudder/rudder";
+import {Mimes} from "../util/mimes";
+import {SysUtil} from "../util/sysUtil";
+import {DirectoryException} from "../util/directoryException";
+import {FileStore, FileInfo} from "./fileStore";
+import {FileRudder} from "../rudder/fileRudder";
+import {GrandAgent} from "../agent/grandAgent";
+import {Multiplexer} from "../common/multiplexer";
+import {PlainTransporter} from "../agent/multiplexer/plainTransporter";
+import {RudderStateStore} from "../common/rudderStateStore";
+import {SendFileShip} from "./sendFileShip";
+import {MULTIPLEXER_TYPE_PIGEON} from "../docker/harbor";
+import * as fs from "fs";
 
 export class TourRes implements Reusable{
 
@@ -42,6 +55,7 @@ export class TourRes implements Reusable{
     canCompress: boolean;
     //compressor] GzipCompressor;
     //yacht: SendFileYacht;
+    directBoarding: boolean = false;
 
     constructor(tour: Tour) {
         this.tour = tour
@@ -49,6 +63,7 @@ export class TourRes implements Reusable{
 
 
     init() {
+        this.directBoarding = BayServer.harbor.isDirectBoarding();
     }
 
     toString(): string {
@@ -70,6 +85,7 @@ export class TourRes implements Reusable{
         this.resConsumeListener = null;
         this.canCompress = false;
         //this.compressor = null;
+        this.directBoarding = false;
     }
 
     sendHeaders(checkId: number) {
@@ -80,6 +96,10 @@ export class TourRes implements Reusable{
 
         if (this.headerSent)
             return;
+
+        if (this.tour.cargo != null) {
+            this.tour.cargo.saveHeaders(this.headers);
+        }
 
         BayLog.trace("%s sendHeaders contLen=%d", this.tour, this.headers.contentLength());
         this.bytesLimit = this.headers.contentLength();
@@ -174,8 +194,11 @@ export class TourRes implements Reusable{
         if (buf == null)
             throw new Error("nullPo");
         //this.tour.checkTourId(checkId);
-        BayLog.trace("%s send content: len=%d", this, len);
+        BayLog.trace("%s send content: len=%d cargo=%s", this, len, this.tour.cargo);
 
+        if (this.tour.cargo != null) {
+            this.tour.cargo.saveContent(buf, ofs, len);
+        }
 
         // New listener
         let lis = () => {
@@ -240,6 +263,10 @@ export class TourRes implements Reusable{
         if (!this.tour.isZombie() && this.tour.city != null)
             this.tour.city.log(this.tour);
 
+        if (this.tour.cargo != null) {
+            this.tour.cargo.endSave();
+        }
+
         // send end message
         if (this.canCompress) {
             //this.getCompressor().finish();
@@ -279,6 +306,143 @@ export class TourRes implements Reusable{
             BayLog.debug("%s Tour is returned (id=%d): %s (state=%d)", this, chkId, tourReturned, this.tour.state)
             if (!tourReturned) {
                 this.tour.changeState(chkId, Tour.STATE_ENDED);
+            }
+        }
+    }
+
+    sendFile(path: string, charset: string): void {
+        let info: FileInfo = null;
+        let rd: Rudder = null;
+        let fileSize = -1;
+
+        if (this.tour.ship.portDocker.protocol() == "h1" &&
+            !this.tour.ship.portDocker.isSecure() &&
+            this.directBoarding) {
+            // Send via Direct Boarding if the protocol is HTTP/1.x and unencrypted.
+            const st = FileStore.getFileStore();
+            info = st.get(path);
+            rd = info.rudder;
+            fileSize = info.fileLength;
+            this.directBoarding = info.rudder != null;
+        }
+
+        if (rd == null) {
+            if (SysUtil.isDirectory(path)) {
+                throw new DirectoryException();
+            }
+            else {
+                switch (BayServer.harbor.getFileMultiplexer()) {
+                    case MULTIPLEXER_TYPE_PIGEON: {
+                        const fd = fs.openSync(path, "r");
+                        rd = new FileRudder(fd);
+                        break;
+                    }
+                    default:
+                        throw new Sink();
+                }
+                fileSize = SysUtil.getFileSize(path);
+            }
+        }
+
+        // Determine MIME type
+        let mtype: string = null;
+        const pos = path.lastIndexOf('.');
+        if (pos >= 0) {
+            const ext = path.substring(pos + 1).toLowerCase();
+            mtype = Mimes.getType(ext);
+        }
+        if (mtype == null)
+            mtype = "application/octet-stream";
+        if (mtype.startsWith("text/") && charset != null)
+            mtype = mtype + "; charset=" + charset;
+
+        this.headers.setContentType(mtype);
+        this.headers.setContentLength(fileSize);
+        this.sendHeaders(Tour.TOUR_ID_NOCHECK);
+
+        if (this.directBoarding) {
+            const turId = this.tour.id();
+            this.setConsumeListener((len, resume) => {
+                try {
+                    this.endResContent(turId);
+                }
+                catch (e) {
+                    if (e instanceof IOException)
+                        BayLog.debug_e(e);
+                    else
+                        throw e;
+                }
+            });
+            this.transferContent(Tour.TOUR_ID_NOCHECK, rd, 0, info.fileLength);
+        }
+        else {
+            const bufsize = this.tour.ship.protocolHandler.maxResPacketDataSize();
+            const agt = GrandAgent.get(this.tour.ship.agentId);
+            let mpx: Multiplexer;
+
+            switch (BayServer.harbor.getFileMultiplexer()) {
+                case MULTIPLEXER_TYPE_PIGEON:
+                    mpx = agt.pigeonMultiplexer;
+                    break;
+                default:
+                    throw new Sink();
+            }
+
+            const sendFileShip = new SendFileShip();
+            const tp = new PlainTransporter(mpx, sendFileShip, true, bufsize, false);
+            sendFileShip.initSendFile(rd, tp, this.tour);
+            const sid = sendFileShip.id();
+            this.setConsumeListener((len, resume) => {
+                if (resume) {
+                    sendFileShip.resumeRead(sid);
+                }
+            });
+
+            const st = RudderStateStore.getStore(agt.agentId).rent();
+            st.init(rd, tp);
+            mpx.addRudderState(rd, st);
+            mpx.reqRead(rd);
+        }
+    }
+
+    transferContent(checkId: number, fileRd: Rudder, ofs: number, len: number): void {
+        BayLog.debug("%s transfer content: ofs=%d len=%d", this, ofs, len);
+
+        const lis = () => {
+            this.tour.checkTourId(checkId);
+            this.resConsumeListener(len, false);
+        };
+
+        if (this.tour.isZombie()) {
+            BayLog.debug("%s zombie tour. return", this);
+            lis();
+            return;
+        }
+
+        if (!this.headerSent)
+            throw new Sink("Header not sent");
+
+        this.bytesPosted += len;
+        BayLog.debug("%s posted res content len=%d posted=%d limit=%d consumed=%d",
+            this.tour, len, this.bytesPosted, this.bytesLimit, this.bytesConsumed);
+
+        if (this.tour.isAborted()) {
+            BayLog.debug("%s Aborted tour. do nothing: %s state=%s", this, this.tour, this.tour.state);
+            this.tour.changeState(checkId, Tour.STATE_ENDED);
+            lis();
+        }
+        else {
+            try {
+                this.tour.ship.transferResContent(this.tour.shipId, this.tour, fileRd, ofs, len, lis);
+            }
+            catch (e) {
+                if (e instanceof IOException) {
+                    BayLog.debug("%s error on sending resContent: %s", this, e);
+                    lis();
+                    this.tour.changeState(Tour.TOUR_ID_NOCHECK, Tour.STATE_ABORTED);
+                    throw e;
+                }
+                throw e;
             }
         }
     }

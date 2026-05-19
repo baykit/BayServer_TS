@@ -13,6 +13,8 @@ import {BayMessage} from "../../bayMessage";
 import {Symbol} from "../../symbol";
 import {BayServer} from "../../bayserver";
 import { Tour } from "../../tour/tour";
+import {Barge} from "../barge";
+import {Barges} from "../../common/barges";
 
 export class BuiltInTownDocker extends DockerBase implements Town {
 
@@ -21,6 +23,7 @@ export class BuiltInTownDocker extends DockerBase implements Town {
     clubList: Club[] = []
     permissionList: Permission[] = []
     rerouteList: Reroute[] = []
+    barges: Barges = new Barges()
     city: City;
     name: string;
 
@@ -54,6 +57,9 @@ export class BuiltInTownDocker extends DockerBase implements Town {
                 break
             case "reroute":
                 this.rerouteList.push(dkr as Object as Reroute);
+                break
+            case "barge":
+                this.barges.add(dkr as Object as Barge);
                 break
             default:
                 return super.initDocker(dkr);
@@ -106,6 +112,10 @@ export class BuiltInTownDocker extends DockerBase implements Town {
 
     getClubs(): Club[] {
         return this.clubList
+    }
+
+    findBarge(path: string): Barge {
+        return this.barges.findBarge(path);
     }
 
     reroute(uri: string): string {

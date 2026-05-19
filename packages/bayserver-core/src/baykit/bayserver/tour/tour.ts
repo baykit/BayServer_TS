@@ -4,6 +4,7 @@ import {Counter} from "../util/counter";
 import {Town} from "../docker/town";
 import {City} from "../docker/city";
 import {Club} from "../docker/club";
+import {Barge} from "../docker/barge";
 import {TourReq} from "./tourReq";
 import {TourRes} from "./tourRes";
 import {HttpException} from "../httpException";
@@ -38,6 +39,7 @@ export class Tour implements Reusable{
     town: Town;
     city: City;
     club: Club;
+    cargo: Barge.Cargo;
 
     req: TourReq = new TourReq(this);
     res: TourRes = new TourRes(this);
@@ -81,6 +83,7 @@ export class Tour implements Reusable{
         this.city = null;
         this.town = null;
         this.club = null;
+        this.cargo = null;
         this.errorHandling = false;
 
         this.changeState(Tour.TOUR_ID_NOCHECK, Tour.STATE_UNINITIALIZED);

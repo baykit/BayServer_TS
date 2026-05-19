@@ -1,26 +1,23 @@
-import {ReadOnlyShip} from "../../common/readOnlyShip";
-import {Tour} from "../../tour/tour";
-import {Rudder} from "../../rudder/rudder";
-import {Transporter} from "../../common/transporter";
+import {ReadOnlyShip} from "../common/readOnlyShip";
+import {Tour} from "./tour";
+import {Rudder} from "../rudder/rudder";
+import {Transporter} from "../common/transporter";
 import {Buffer} from "buffer";
-import {BayLog} from "../../bayLog";
-import {NextSocketAction} from "../../agent/nextSocketAction";
-import {IOException} from "../../util/ioException";
-import {HttpStatus} from "../../util/httpStatus";
-import {FileContent} from "./fileContent";
+import {BayLog} from "../bayLog";
+import {NextSocketAction} from "../agent/nextSocketAction";
+import {IOException} from "../util/ioException";
+import {HttpStatus} from "../util/httpStatus";
 
 export class SendFileShip extends ReadOnlyShip {
 
-    fileWroteLen: number
-    fileContent: FileContent
+    fileWroteLen: number = 0
+
     tour: Tour
     tourId: number
 
 
-    initSendFileShip(rd: Rudder, tp : Transporter, tur: Tour, fileContent: FileContent = null): void {
+    initSendFile(rd: Rudder, tp: Transporter, tur: Tour): void {
         super.init(tur.ship.agentId, rd, tp);
-        this.fileWroteLen = 0;
-        this.fileContent = fileContent;
         this.tour = tur;
         this.tourId = tur.tourId;
     }
@@ -35,11 +32,13 @@ export class SendFileShip extends ReadOnlyShip {
 
     reset(): void {
         super.reset()
-        this.fileContent = null
+        this.fileWroteLen = 0
+        this.tourId = 0
+        this.tour = null
     }
 
     //////////////////////////////////////////////////////
-    // Implements Ship
+    // Implements ReadOnlyShip
     //////////////////////////////////////////////////////
 
     notifyRead(buf: Buffer): number {
@@ -48,22 +47,17 @@ export class SendFileShip extends ReadOnlyShip {
 
         try {
             let available = this.tour.res.sendResContent(this.tourId, buf, 0, buf.length);
-
-            if (this.fileContent != null) {
-                this.fileContent.append(buf, buf.length);
-            }
-
-            if(available) {
+            if (available) {
                 return NextSocketAction.CONTINUE;
             }
             else {
                 return NextSocketAction.SUSPEND;
             }
         }
-        catch(e) {
+        catch (e) {
             if (e instanceof IOException) {
-                this.notifyError(e);
-                return NextSocketAction.CLOSE;
+                this.notifyError(e)
+                return NextSocketAction.CLOSE
             }
             else {
                 throw e
@@ -76,7 +70,7 @@ export class SendFileShip extends ReadOnlyShip {
         try {
             this.tour.res.sendError(this.tourId, HttpStatus.INTERNAL_SERVER_ERROR, null, err);
         }
-        catch(e) {
+        catch (e) {
             if (e instanceof IOException) {
                 BayLog.debug_e(e)
             }
@@ -91,7 +85,7 @@ export class SendFileShip extends ReadOnlyShip {
         try {
             this.tour.res.endResContent(this.tourId);
         }
-        catch(e) {
+        catch (e) {
             if (e instanceof IOException) {
                 BayLog.debug_e(e)
             }
@@ -108,6 +102,4 @@ export class SendFileShip extends ReadOnlyShip {
     checkTimeout(durationSec: number): boolean {
         return false;
     }
-
-
 }

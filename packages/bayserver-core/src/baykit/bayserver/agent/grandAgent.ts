@@ -29,7 +29,7 @@ import {ClosedLetter} from "./letter/closedLetter";
 import {ErrorLetter} from "./letter/errorLetter";
 import {Letter} from "./letter/letter";
 import {ValveMultiplexer} from "./multiplexer/valveMultiplexer";
-import {MULTIPLEXER_TYPE_VALVE, RECIPIENT_TYPE_EVENT, RECIPIENT_TYPE_PIPE} from "../docker/harbor";
+import {getMultiplexerTypeName, MULTIPLEXER_TYPE_PIGEON, MULTIPLEXER_TYPE_VALVE, RECIPIENT_TYPE_EVENT, RECIPIENT_TYPE_PIPE} from "../docker/harbor";
 import {Postpone} from "../common/postpone";
 import {exit} from "process";
 
@@ -59,6 +59,7 @@ export class GrandAgent {
 
     agentId: number
     netMultiplexer: Multiplexer
+    fileMultiplexer: Multiplexer
     valveMultiplexer: ValveMultiplexer
     pigeonMultiplexer: PigeonMultiplexer
     recipient: Recipient
@@ -108,6 +109,16 @@ export class GrandAgent {
         }
 
         this.netMultiplexer = this.valveMultiplexer
+
+        switch (BayServer.harbor.getFileMultiplexer()) {
+            case MULTIPLEXER_TYPE_PIGEON:
+                this.fileMultiplexer = this.pigeonMultiplexer
+                break
+
+            default:
+                throw new Sink("Multiplexer not supported: " + getMultiplexerTypeName(BayServer.harbor.getFileMultiplexer()))
+        }
+
         this.startTimer()
     }
 

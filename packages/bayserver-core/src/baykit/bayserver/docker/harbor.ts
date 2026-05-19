@@ -1,6 +1,7 @@
 import {Locale} from "../util/locale";
 import {Trouble} from "./trouble";
 import {Sink} from "../sink";
+import {Barge} from "./barge";
 
 export const MULTIPLEXER_TYPE_SPIDER: number = 1
 export const MULTIPLEXER_TYPE_SPIN : number = 2
@@ -83,14 +84,33 @@ export interface Harbor {
     /** Multi core flag */
     isMultiCore(): boolean;
 
-    /** True if cache is enabled */
-    isEnableCache(): boolean;
+    /**
+     * Whether to enable Direct Boarding (the sendfile API).
+     * This bypasses user-space formalities for efficient data transfer.
+     */
+    isDirectBoarding(): boolean;
 
-    /** Lifespan seconds of cache */
-    getCacheLifespanSec(): number;
+    /**
+     * The lifespan, in seconds, of a cargo (cached file).
+     */
+    getCargoLifespanSec(): number;
 
-    /** Size of cache in MB */
-    getCacheSizeMb(): number;
+    /**
+     * The maximum number of files (file descriptors) to be cached for Direct Boarding.
+     * When this limit is reached, the least recently used (LRU) items are evicted.
+     */
+    getMaxDirectBoardings(): number;
+
+    /**
+     * The maximum file size, in mega-bytes, to be cached.
+     * Files exceeding this size will not be cached.
+     */
+    getMaxCargoSize(): number;
+
+    /**
+     * Find barge by path
+     */
+    findBarge(path: string): Barge;
 }
 
 export function getMultiplexerTypeName(type: MultiplexerType) : String {
